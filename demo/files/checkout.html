@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>إتمام الطلب — متجر نخيل</title>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  dataLayer.push({ event: 'begin_checkout', value: 45, currency: 'SAR' });
+</script>
+</head>
+<body>
+<header><a href="/">متجر نخيل</a> <a href="/cart">السلة (1)</a></header>
+<main>
+  <h1>إتمام الطلب</h1>
+  <section id="summary">
+    <h2>ملخص الطلب</h2>
+    <p>تمر خلاص 1 كجم × 1 — 45 ر.س</p>
+    <p>رسوم الشحن: تُحسب عند الدفع</p>
+    <p>الإجمالي: 45 ر.س + الشحن</p>
+  </section>
+  <form id="address">
+    <h2>عنوان الشحن</h2>
+    <label for="name">الاسم الكامل</label>
+    <input id="name" name="full_name" required>
+    <input name="phone" placeholder="05xxxxxxxx" type="tel">
+    <label for="city">المدينة</label>
+    <select id="city" name="city"><option>الرياض</option><option>جدة</option></select>
+    <input name="postal_code" placeholder="الرمز البريدي">
+    <label for="street">الحي والشارع</label>
+    <input id="street" name="street">
+  </form>
+  <form id="payment">
+    <h2>طريقة الدفع</h2>
+    <label><input type="radio" name="method" value="card" checked> بطاقة مدى / ائتمانية</label>
+    <label><input type="radio" name="method" value="cod"> الدفع عند الاستلام</label>
+    <button type="submit" id="place-order">تأكيد الطلب</button>
+  </form>
+  <div class="alert-danger" role="alert">حدث خطأ، حاول مرة أخرى</div>
+  <button type="button" class="icon-close"><svg width="12" height="12"></svg></button>
+</main>
+</body>
+</html>

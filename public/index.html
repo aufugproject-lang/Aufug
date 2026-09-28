@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مراجعة جودة المنتج الرقمي</title>
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a href="/" class="brand">مراجعة جودة المنتج الرقمي</a>
+  <span id="model-status" class="pill"></span>
+</header>
+
+<main class="container">
+  <form id="analyze-form" novalidate>
+    <h1>رحلة جديدة للمراجعة</h1>
+    <p class="lead">اختر مصدر الدليل، واكتب الرحلة المتوقعة، ثم ابدأ التحليل.</p>
+
+    <fieldset class="source-choice">
+      <legend>مصدر الدليل</legend>
+      <label class="choice">
+        <input type="radio" name="source" value="url" checked>
+        <span><strong>رابط الموقع</strong><small>تفتح الأداة الموقع بمتصفح آلي وتمشي الخطوات</small></span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="source" value="file">
+        <span><strong>إرفاق ملف</strong><small>يعتمد التحليل على محتوى الملفات فقط</small></span>
+      </label>
+    </fieldset>
+
+    <section class="card" data-mode="url">
+      <h2>الموقع</h2>
+      <label class="field">
+        <span>رابط الموقع (بيئة الاختبار)</span>
+        <input type="url" name="url" dir="ltr" placeholder="https://staging.example.test">
+      </label>
+      <div class="row">
+        <label class="field">
+          <span>مستخدم الحساب التجريبي <em>اختياري</em></span>
+          <input name="test_username" dir="ltr" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>كلمة مرور الحساب التجريبي <em>اختياري</em></span>
+          <input name="test_password" type="password" dir="ltr" autocomplete="new-password">
+        </label>
+      </div>
+    </section>
+
+    <section class="card" data-mode="file" hidden>
+      <h2>ملفات الدليل</h2>
+      <label class="dropzone" id="dropzone">
+        <input type="file" name="files" id="files" multiple accept=".png,.jpg,.jpeg,.txt,.md,.json,.har,.html,.htm">
+        <span>اسحب الملفات هنا أو اضغط للاختيار</span>
+        <small>png, jpg, txt, md, json, har, html — ملف واحد أو أكثر</small>
+      </label>
+      <ul id="file-list" class="file-list"></ul>
+    </section>
+
+    <section class="card">
+      <h2>الرحلة</h2>
+      <div class="row">
+        <label class="field">
+          <span>اسم المنتج</span>
+          <input name="product_name" required>
+        </label>
+        <label class="field">
+          <span>اسم الرحلة</span>
+          <input name="journey" required placeholder="مثال: التسجيل وإنشاء أول طلب">
+        </label>
+      </div>
+      <label class="field">
+        <span>خطوات الرحلة <em>خطوة في كل سطر</em></span>
+        <textarea name="steps" rows="6" required></textarea>
+      </label>
+      <details class="hint" data-mode="url">
+        <summary>صيغ الخطوات التي ينفذها المتصفح الآلي</summary>
+        <table>
+          <tr><td dir="ltr">افتح /login</td><td>فتح مسار أو رابط</td></tr>
+          <tr><td>اضغط «تسجيل الدخول»</td><td>ضغط زر أو رابط بنصه الظاهر</td></tr>
+          <tr><td>اكتب «{{username}}» في «البريد الإلكتروني»</td><td>تعبئة حقل بتسميته أو placeholder أو name</td></tr>
+          <tr><td>اختر «الرياض» من «المدينة»</td><td>اختيار من قائمة</td></tr>
+          <tr><td>فعّل «أوافق على الشروط»</td><td>تفعيل خانة اختيار</td></tr>
+          <tr><td>اضغط مفتاح Enter</td><td>ضغط مفتاح</td></tr>
+          <tr><td>انتظر «تم الحفظ» · انتظر 2 ثانية</td><td>انتظار نص أو مدة</td></tr>
+          <tr><td>تحقق من ظهور «رقم الطلب»</td><td>التحقق من ظهور نص</td></tr>
+        </table>
+        <p><code dir="ltr">{{username}}</code> و<code dir="ltr">{{password}}</code> تُستبدل ببيانات الحساب التجريبي. أي خطوة بصيغة أخرى تُسجل خطوةً تعذر تنفيذها وتتوقف الرحلة عندها.</p>
+      </details>
+      <label class="field">
+        <span>شرط النجاح <em>جملة واحدة</em></span>
+        <input name="success_condition" required placeholder="مثال: تظهر صفحة تأكيد تحتوي رقم الطلب">
+      </label>
+      <label class="field">
+        <span>القصص والميزات المتوقعة <em>بند في كل سطر</em></span>
+        <textarea name="expected_features" rows="4"></textarea>
+      </label>
+      <label class="field">
+        <span>أحداث التحليلات المتوقعة <em>سطر لكل حدث: اسم_الحدث — متى يُطلق</em></span>
+        <textarea name="expected_events" rows="4" placeholder="sign_up — عند إنشاء الحساب"></textarea>
+      </label>
+    </section>
+
+    <div id="form-errors" class="errors" role="alert" hidden></div>
+
+    <div class="actions">
+      <button type="submit" class="primary">ابدأ التحليل</button>
+      <button type="button" id="load-demo" class="secondary">تعبئة بيانات التجربة</button>
+      <a href="/results.html?id=demo" class="link">فتح نتيجة التجربة مباشرة</a>
+    </div>
+  </form>
+
+  <section id="waiting" class="waiting" hidden aria-live="polite">
+    <div class="spinner" aria-hidden="true"></div>
+    <h2>جارٍ التحليل</h2>
+    <p id="progress">في الانتظار</p>
+    <p class="muted">قد يستغرق وضع الرابط عدة دقائق حسب عدد الخطوات.</p>
+  </section>
+</main>
+
+<script src="/js/form.js"></script>
+</body>
+</html>

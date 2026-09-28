@@ -1,0 +1,7 @@
+[12:04:11] GET https://staging.nakheel.test/products/khalas-1kg 200
+[12:04:40] POST https://staging.nakheel.test/api/cart 200
+[12:05:02] GET https://staging.nakheel.test/checkout 200
+[12:05:03] Uncaught TypeError: Cannot read properties of undefined (reading 'shippingZone') at checkout.bundle.js:1:48213
+[12:06:18] POST https://staging.nakheel.test/api/checkout/address 200
+[12:06:40] POST https://staging.nakheel.test/api/orders 500 (Internal Server Error)
+[12:06:40] Error: order submission failed {"error":"PAYMENT_GATEWAY_TIMEOUT"}

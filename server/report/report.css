@@ -1,0 +1,103 @@
+/* أنماط تقرير PDF المطبوع فقط — مستقلة تمامًا عن أنماط واجهة التطبيق. */
+@page {
+  size: A4;
+  margin: 26mm 16mm 22mm 16mm;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Report Naskh', 'Noto Naskh Arabic', 'Noto Sans Arabic', 'Arial', sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.65;
+  color: #1a1a1a;
+  direction: rtl;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+h1, h2, h3 { font-weight: 700; margin: 0; }
+h2 {
+  font-size: 15pt;
+  margin: 0 0 4mm;
+  padding-bottom: 2mm;
+  border-bottom: 0.6pt solid #1a1a1a;
+  break-after: avoid;
+}
+h3 { font-size: 11.5pt; margin: 5mm 0 2mm; break-after: avoid; }
+p { margin: 0 0 3mm; }
+
+.ltr { direction: ltr; unicode-bidi: embed; font-family: 'DejaVu Sans Mono', monospace; font-size: 9pt; }
+
+/* الغلاف */
+.cover {
+  height: 240mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  break-after: page;
+}
+.cover .kicker { font-size: 11pt; color: #555; margin-bottom: 6mm; }
+.cover h1 { font-size: 26pt; line-height: 1.3; margin-bottom: 4mm; }
+.cover .journey { font-size: 15pt; margin-bottom: 14mm; }
+.cover table.meta { width: 100%; border-collapse: collapse; }
+.cover table.meta th, .cover table.meta td {
+  text-align: right;
+  padding: 3mm 0;
+  border-top: 0.5pt solid #bbb;
+  font-size: 11.5pt;
+}
+.cover table.meta th { width: 45mm; color: #555; font-weight: 400; }
+.cover .score { font-size: 20pt; font-weight: 700; }
+.cover .note { margin-top: 10mm; font-size: 9.5pt; color: #555; }
+
+section { margin-bottom: 9mm; }
+section.new-page { break-before: page; }
+
+/* جداول بعرض الصفحة */
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 9.5pt;
+}
+table.data thead { display: table-header-group; }
+table.data th {
+  background: #efefef;
+  text-align: right;
+  font-weight: 700;
+  padding: 2mm 2mm;
+  border-bottom: 0.8pt solid #1a1a1a;
+}
+table.data td {
+  vertical-align: top;
+  padding: 2mm 2mm;
+  border-bottom: 0.4pt solid #c8c8c8;
+  overflow-wrap: anywhere;
+}
+table.data tr { break-inside: avoid; page-break-inside: avoid; }
+
+table.kv { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
+table.kv th, table.kv td { text-align: right; padding: 2mm 0; border-bottom: 0.4pt solid #c8c8c8; vertical-align: top; }
+table.kv th { width: 55mm; font-weight: 700; }
+
+/* ألوان الشدة فقط */
+.sev { font-weight: 700; white-space: nowrap; }
+.sev-high { color: #b3261e; }
+.sev-medium { color: #a15c00; }
+.sev-low { color: #2f5d8a; }
+
+ol.recs { margin: 0; padding-right: 6mm; }
+ol.recs li { margin-bottom: 2mm; break-inside: avoid; }
+
+ul.plain { margin: 0; padding-right: 6mm; }
+ul.plain li { margin-bottom: 1.5mm; break-inside: avoid; }
+
+.muted { color: #555; }
+.small { font-size: 9pt; }
+.review-note { font-size: 9pt; color: #555; margin-top: 2mm; }
+
+.nowrap { white-space: nowrap; }
+.code-tag { direction: ltr; text-align: right; font-family: 'DejaVu Sans Mono', monospace; font-size: 7pt; color: #555; overflow-wrap: anywhere; }

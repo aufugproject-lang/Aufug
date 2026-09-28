@@ -1,0 +1,88 @@
+{
+  "_note": "تحليل مسجل مسبقًا لملفات التجربة في demo/files بصيغة مخرجات النموذج نفسها. يُستخدم فقط لبيانات التجربة عند غياب مفتاح النموذج، ويمر بنفس قواعد التحقق.",
+  "success_condition_met": "no",
+  "success_condition_basis": "طلبا POST /api/orders في network.har أعادا 500 مع PAYMENT_GATEWAY_TIMEOUT، وملاحظات الجلسة تذكر أن رقم الطلب لم يظهر.",
+  "journey_state": "stopped",
+  "stopped_at_step": 5,
+  "findings": [
+    {
+      "criterion": "friction",
+      "severity": "high",
+      "step": 5,
+      "evidence_source": "file:network.har",
+      "evidence": "طلبان POST إلى /api/orders أعادا الحالة 500 مع الرد {\"error\":\"PAYMENT_GATEWAY_TIMEOUT\"}، ولا يوجد بعدهما أي طلب لصفحة تأكيد.",
+      "impact": "لا يستطيع العميل إتمام الطلب، فتتوقف الرحلة عند تأكيد الطلب ويضيع البيع.",
+      "recommendation": "معالجة مهلة بوابة الدفع في بيئة الاختبار، وإظهار حالة واضحة للعميل عند فشل الدفع مع خيار دفع بديل.",
+      "confidence": "high"
+    },
+    {
+      "criterion": "CX",
+      "severity": "high",
+      "step": 5,
+      "evidence_source": "file:session-notes.md",
+      "evidence": "ملاحظة المختبر: «بعد إعادة تحميل الصفحة للمحاولة مجددًا، كانت حقول عنوان الشحن فارغة واضطررت لإدخال العنوان ورقم الجوال من جديد».",
+      "impact": "بيانات العميل المدخلة تضيع بعد الخطأ، ما يرفع احتمال التخلي عن الطلب.",
+      "recommendation": "حفظ بيانات العنوان في الجلسة واسترجاعها تلقائيًا بعد فشل تأكيد الطلب.",
+      "confidence": "medium"
+    },
+    {
+      "criterion": "UX",
+      "severity": "medium",
+      "step": 5,
+      "evidence_source": "file:checkout.html",
+      "evidence": "رسالة الخطأ الظاهرة في الصفحة هي «حدث خطأ، حاول مرة أخرى» فقط، بلا سبب ولا خطوة تالية.",
+      "impact": "العميل لا يعرف هل خُصم المبلغ أم لا، ولا ما يجب فعله، فيكرر المحاولة بصعوبة.",
+      "recommendation": "استبدال الرسالة العامة برسالة تذكر أن الدفع لم يتم وأن المبلغ لم يُخصم، مع زر لإعادة المحاولة أو تغيير طريقة الدفع.",
+      "confidence": "high"
+    },
+    {
+      "criterion": "accessibility",
+      "severity": "medium",
+      "step": 4,
+      "evidence_source": "file:checkout.html",
+      "evidence": "الحقلان phone و postal_code في نموذج عنوان الشحن بلا عنصر label ولا aria-label، ويعتمدان على placeholder فقط. زر الإغلاق icon-close بلا اسم نصي.",
+      "impact": "مستخدم قارئ الشاشة لا يعرف غرض الحقلين، فيكمل تعبئة العنوان بصعوبة.",
+      "recommendation": "إضافة تسميات label مرتبطة بالحقلين phone و postal_code، وإضافة aria-label لزر الإغلاق.",
+      "confidence": "high"
+    },
+    {
+      "criterion": "feature_completeness",
+      "severity": "medium",
+      "step": 4,
+      "evidence_source": "file:checkout.html",
+      "evidence": "ملخص الطلب يعرض «رسوم الشحن: تُحسب عند الدفع» و«الإجمالي: 45 ر.س + الشحن»، بينما الميزة المتوقعة هي عرض تكلفة الشحن قبل الدفع.",
+      "impact": "العميل لا يرى الإجمالي النهائي قبل الدفع، ما يضعف الثقة ويزيد التردد.",
+      "recommendation": "حساب رسوم الشحن بعد اختيار المدينة وعرض الإجمالي النهائي قبل زر «تأكيد الطلب».",
+      "confidence": "high"
+    },
+    {
+      "criterion": "feature_completeness",
+      "severity": "low",
+      "step": 5,
+      "evidence_source": "file:checkout.html",
+      "evidence": "صفحة إتمام الطلب لا تحتوي أي حقل أو زر أو نص خاص بكود الخصم.",
+      "impact": "العميل الذي يملك كود خصم لا يستطيع استخدامه، لكنه يستطيع إتمام الشراء بالسعر الكامل.",
+      "recommendation": "إضافة حقل «كود الخصم» في قسم ملخص الطلب قبل الدفع.",
+      "confidence": "high"
+    },
+    {
+      "criterion": "navigation",
+      "severity": "low",
+      "step": 3,
+      "evidence_source": "file:session-notes.md",
+      "evidence": "ملاحظة المختبر: «زر المتابعة بدون حساب يظهر أسفل نموذج تسجيل الدخول كرابط نصي صغير؛ احتجت قرابة 20 ثانية لإيجاده».",
+      "impact": "تأخير في الوصول إلى الشراء كضيف دون أن يوقف المهمة.",
+      "recommendation": "إظهار خيار «المتابعة بدون حساب» كزر رئيسي بجانب تسجيل الدخول.",
+      "confidence": "medium"
+    }
+  ],
+  "missing_analytics_events": [
+    { "event_name": "add_shipping_info", "when": "عند حفظ عنوان الشحن في الخطوة 4", "why": "طلب POST /api/checkout/address نجح بالحالة 200 في network.har، ولم يتبعه أي طلب إلى analytics.nakheel.test/collect يحمل add_shipping_info." },
+    { "event_name": "add_payment_info", "when": "عند اختيار طريقة الدفع في الخطوة 5", "why": "لا يوجد في network.har ولا في dataLayer داخل checkout.html أي إرسال للحدث رغم اختيار طريقة الدفع." },
+    { "event_name": "purchase", "when": "عند ظهور صفحة تأكيد الطلب", "why": "لم تظهر صفحة التأكيد بسبب فشل /api/orders، فلم يُرسل الحدث. يجب التحقق منه مجددًا بعد إصلاح الدفع." }
+  ],
+  "insufficient_evidence": [
+    "لم تُرفق صفحة تأكيد الطلب (الخطوة 6)، فلا يمكن الحكم على محتواها أو على ظهور رقم الطلب فيها.",
+    "خطأ الكونسول «Cannot read properties of undefined (reading 'shippingZone')» وطلب /api/shipping/rates?city= بالحالة 400 يشيران إلى خلل في حساب الشحن، لكن الدليل لا يبين أثرهما الظاهر للعميل بدقة."
+  ]
+}
