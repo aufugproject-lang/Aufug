@@ -70,7 +70,11 @@ export function deterministicAnalytics(checks, collected) {
   const networkSources = hasNetworkEvidence(collected);
   for (const c of checks) {
     if (c.observed) continue;
-    if (collected.source === 'url' && !collected.all_steps_executed) {
+    if (collected.auto_explored) {
+      insufficient.push(
+        `لم يُرصد الحدث «${c.event_name}» خلال الاستكشاف التلقائي، لكن الاستكشاف يفتح الصفحات فقط ولا ينفذ إجراءات، فلا يثبت غياب الحدث. اكتب خطوات الرحلة للتحقق منه.`,
+      );
+    } else if (collected.source === 'url' && !collected.all_steps_executed) {
       insufficient.push(
         `لم يُتحقق من الحدث «${c.event_name}» لأن الرحلة توقفت عند الخطوة ${collected.stopped_at_step} قبل الوصول إلى جميع الخطوات.`,
       );

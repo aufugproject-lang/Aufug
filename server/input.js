@@ -55,19 +55,37 @@ export function normalizeInput(body) {
 
 export function validateInput(input, fileCount) {
   const errors = [];
-  if (!input.product_name) errors.push('اسم المنتج مطلوب.');
-  if (!input.journey) errors.push('اسم الرحلة مطلوب.');
-  if (!input.steps.length) errors.push('اكتب خطوة واحدة على الأقل للرحلة.');
-  if (!input.success_condition) errors.push('شرط النجاح مطلوب.');
   if (input.source === 'url') {
+    // في وضع الرابط يكفي الرابط؛ باقي الحقول اختيارية وتُكمل تلقائيًا بعد الاستكشاف
     try {
       const u = new URL(input.url);
       if (!/^https?:$/.test(u.protocol)) throw new Error();
     } catch {
       errors.push('رابط الموقع غير صالح. استخدم رابطًا يبدأ بـ http أو https.');
     }
-  } else if (!fileCount) {
-    errors.push('أرفق ملف دليل واحدًا على الأقل.');
+    return errors;
   }
+  if (!input.product_name) errors.push('اسم المنتج مطلوب.');
+  if (!input.journey) errors.push('اسم الرحلة مطلوب.');
+  if (!input.steps.length) errors.push('اكتب خطوة واحدة على الأقل للرحلة.');
+  if (!input.success_condition) errors.push('شرط النجاح مطلوب.');
+  if (!fileCount) errors.push('أرفق ملف دليل واحدًا على الأقل.');
   return errors;
+}
+
+// يُكمل الحقول الفارغة في وضع الرابط من الدليل المجموع، ويجعل الخطوات المستكشفة خطوات الرحلة
+export function completeUrlInput(input, collected) {
+  if (!input.product_name) {
+    let host = input.url;
+    try {
+      host = new URL(input.url).hostname;
+    } catch {}
+    input.product_name = collected.discovered_title || host;
+  }
+  if (collected.auto_explored) {
+    if (!input.journey) input.journey = 'استكشاف تلقائي للموقع';
+    input.steps = collected.steps.filter((s) => s.number > 0).map((s) => ({ number: s.number, text: s.text }));
+  }
+  if (!input.journey) input.journey = 'رحلة بدون اسم';
+  return input;
 }

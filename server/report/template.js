@@ -77,7 +77,7 @@ export function renderReport(r) {
   const counts = { high: 0, medium: 0, low: 0 };
   for (const f of r.findings) counts[f.severity]++;
   const scoreText = r.score_out_of_5 == null ? 'غير محسوبة' : `${r.score_out_of_5} من 5`;
-  const sourceText = r.source === 'url' ? 'رابط الموقع (أتمتة متصفح)' : 'ملفات دليل مرفقة';
+  const sourceText = r.source === 'url' ? (r.meta.auto_explored ? 'رابط الموقع (استكشاف تلقائي بمتصفح آلي)' : 'رابط الموقع (أتمتة متصفح)') : 'ملفات دليل مرفقة';
   const top = topRecommendations(r.findings);
 
   const findingsRows = r.findings
@@ -131,7 +131,7 @@ export function renderReport(r) {
   <h2>الملخص التنفيذي</h2>
   <table class="kv">
     <tr><th>اكتمال الرحلة</th><td>${esc(completionText(r))}</td></tr>
-    <tr><th>شرط النجاح</th><td>${bidi(r.meta.success_condition)}${r.meta.success_condition_basis ? `<div class="small muted">${bidi(r.meta.success_condition_basis)}</div>` : ''}</td></tr>
+    <tr><th>شرط النجاح</th><td>${r.meta.success_condition ? bidi(r.meta.success_condition) : 'غير محدد'}${r.meta.success_condition_basis ? `<div class="small muted">${bidi(r.meta.success_condition_basis)}</div>` : ''}</td></tr>
     <tr><th>الدرجة</th><td>${scoreText}${r.meta.scoring ? `<div class="small muted">محسوبة من ${r.meta.scoring.counted_findings} ملاحظة عالية الثقة. ${esc(r.meta.scoring.method)}</div>` : ''}</td></tr>
     <tr><th>الملاحظات حسب الشدة</th><td>
       <span class="sev sev-high">عالية: ${counts.high}</span> &nbsp;·&nbsp;

@@ -8,12 +8,16 @@
 </head>
 <body>
 <header class="topbar">
-  <a href="/" class="brand">مراجعة جودة المنتج الرقمي</a>
-  <a href="/" class="link">مراجعة جديدة</a>
+  <a href="/" class="brand"><span class="logo" aria-hidden="true">◆</span> مراجعة جودة المنتج</a>
+  <a href="/" class="button ghost small-btn">+ مراجعة جديدة</a>
 </header>
 
-<main class="container wide" id="app">
-  <p id="loading">جارٍ تحميل النتائج…</p>
+<main class="page wide" id="app">
+  <div class="skeleton" aria-busy="true">
+    <div class="sk sk-title"></div>
+    <div class="sk-row"><div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>
+    <div class="sk sk-block"></div>
+  </div>
 </main>
 
 <script src="/js/results.js"></script>

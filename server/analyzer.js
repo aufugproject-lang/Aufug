@@ -75,6 +75,7 @@ function evidenceForModel(collected) {
     return {
       source: 'url',
       target_url: collected.target_url,
+      auto_explored: Boolean(collected.auto_explored),
       all_steps_executed: collected.all_steps_executed,
       stopped_at_step: collected.stopped_at_step,
       steps: collected.steps.map((s) => ({
@@ -109,6 +110,11 @@ function buildUserContent(input, collected, analyticsChecks) {
     expected_features_and_stories: input.expected_features,
     expected_analytics_events: input.expected_events,
   };
+  if (collected.auto_explored) {
+    brief.note =
+      'لم يكتب المستخدم خطوات: الخطوات أعلاه استكشاف تلقائي (تسجيل دخول إن وُجد حساب تجريبي ثم فتح روابط التنقل). قيّم ما ظهر في الصفحات المفتوحة فقط، ولا تعدّ عدم تنفيذ إجراءات لم تُطلب ملاحظة.';
+  }
+  if (!input.success_condition) brief.success_condition = 'غير محدد — استخدم unknown لـ success_condition_met';
   const content = [
     { type: 'text', text: `مدخلات المراجعة:\n${JSON.stringify(brief, null, 1)}` },
     { type: 'text', text: `مصادر الدليل المسموحة لحقل evidence_source:\n${JSON.stringify(allowedSources(collected))}` },
@@ -248,8 +254,16 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
   let missing = det.missing;
   let successBasis = null;
 
+  const hasCondition = Boolean(input.success_condition);
+  const auto = Boolean(collected.auto_explored);
+  const noConditionNote = auto
+    ? 'استُكشف الموقع تلقائيًا بدون شرط نجاح، فلا يمكن الحكم على اكتمال رحلة محددة. اكتب خطوات الرحلة وشرط النجاح للحكم عليها.'
+    : 'لم يُحدد شرط نجاح، فلا يمكن الحكم على اكتمال الرحلة؛ عُرض ما نُفذ من خطوات.';
+  const validStep = (s) => Number.isInteger(s) && s >= 0 && s <= input.steps.length;
+
   if (collected.source === 'url') {
-    completed = collected.all_steps_executed;
+    // توقف فعلي (فشل فتح الموقع أو فشل خطوة مكتوبة) يعني أن الرحلة لم تكتمل
+    completed = collected.all_steps_executed ? (hasCondition && !auto ? true : null) : false;
     stoppedAt = collected.stopped_at_step;
   } else {
     completed = null;
@@ -260,22 +274,30 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
     const { findings: kept, rejected } = validateFindings(modelOut.findings, collected, input);
     findings = kept;
     insufficient.push(...(modelOut.insufficient_evidence || []), ...rejected);
-    successBasis = modelOut.success_condition_basis || null;
+    successBasis = hasCondition ? modelOut.success_condition_basis || null : null;
 
     if (collected.source === 'url') {
-      if (completed && modelOut.success_condition_met === 'no') {
-        completed = false;
-        const s = modelOut.stopped_at_step;
-        stoppedAt = Number.isInteger(s) && s >= 0 && s <= input.steps.length ? s : input.steps.length;
+      if (completed !== false) {
+        if (!hasCondition) {
+          completed = null;
+          insufficient.push(noConditionNote);
+        } else if (modelOut.success_condition_met === 'yes') {
+          completed = true;
+        } else if (modelOut.success_condition_met === 'no') {
+          completed = false;
+          stoppedAt = validStep(modelOut.stopped_at_step) ? modelOut.stopped_at_step : auto ? null : input.steps.length;
+        } else if (auto) {
+          completed = null;
+          insufficient.push('الاستكشاف التلقائي لم يُظهر دليلًا كافيًا على تحقق شرط النجاح.');
+        } else {
+          insufficient.push('نُفذت كل الخطوات، لكن الدليل لا يكفي لتأكيد تحقق شرط النجاح.');
+        }
       }
-      if (completed && modelOut.success_condition_met === 'unknown')
-        insufficient.push('نُفذت كل الخطوات، لكن الدليل لا يكفي لتأكيد تحقق شرط النجاح.');
     } else if (modelOut.journey_state === 'completed' && modelOut.success_condition_met !== 'no') {
       completed = true;
     } else if (modelOut.journey_state === 'stopped' || modelOut.success_condition_met === 'no') {
       completed = false;
-      const s = modelOut.stopped_at_step;
-      stoppedAt = Number.isInteger(s) && s >= 0 && s <= input.steps.length ? s : null;
+      stoppedAt = validStep(modelOut.stopped_at_step) ? modelOut.stopped_at_step : null;
     } else {
       insufficient.push('الملفات المرفقة لا تكفي للحكم على اكتمال الرحلة.');
     }
@@ -291,8 +313,11 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
     score = s.score;
     scoring = s;
   } else {
-    if (collected.source === 'url' && collected.all_steps_executed)
-      insufficient.push('نُفذت كل الخطوات آليًا؛ التحقق من شرط النجاح يحتاج حكم النموذج.');
+    if (collected.source === 'url' && collected.all_steps_executed) {
+      if (!hasCondition) insufficient.push(noConditionNote);
+      else if (auto) insufficient.push('التحقق من شرط النجاح بعد الاستكشاف التلقائي يحتاج حكم النموذج.');
+      else insufficient.push('نُفذت كل الخطوات آليًا؛ التحقق من شرط النجاح يحتاج حكم النموذج.');
+    }
     if (collected.source === 'file') insufficient.push('الحكم على اكتمال الرحلة من الملفات يحتاج حكم النموذج.');
     for (const f of collected.files || [])
       if (f.kind === 'image') insufficient.push(`الصورة «${f.file}» لا تُقرأ إلا بالنموذج؛ لم تُحلل.`);
@@ -313,6 +338,7 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
       analysis_mode: mode,
       model: mode === 'model' ? config.model : null,
       notice,
+      auto_explored: Boolean(collected.auto_explored),
       success_condition: input.success_condition,
       success_condition_basis: successBasis,
       scoring,

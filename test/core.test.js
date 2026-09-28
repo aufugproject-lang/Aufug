@@ -61,3 +61,14 @@ test('فحص التحليلات: الظاهر لا يُعد ناقصًا، وم�
 test('اسم ملف التقرير', () => {
   assert.equal(reportFilename({ product_name: 'متجر نخيل', meta: { created_at: '2026-09-28T10:00:00Z' } }), 'Quality-Report-متجر-نخيل-2026-09-28.pdf');
 });
+
+test('وضع الرابط يكفيه الرابط وحده', async () => {
+  const { normalizeInput, validateInput, completeUrlInput } = await import('../server/input.js');
+  const input = normalizeInput({ source: 'url', url: 'https://staging.example.test/' });
+  assert.deepEqual(validateInput(input, 0), []);
+  completeUrlInput(input, { auto_explored: true, discovered_title: 'متجر', steps: [{ number: 0, text: 'x' }, { number: 1, text: 'افتح «من نحن»' }] });
+  assert.equal(input.product_name, 'متجر');
+  assert.equal(input.journey, 'استكشاف تلقائي للموقع');
+  assert.deepEqual(input.steps, [{ number: 1, text: 'افتح «من نحن»' }]);
+  assert.ok(validateInput(normalizeInput({ source: 'file' }), 0).length >= 4);
+});

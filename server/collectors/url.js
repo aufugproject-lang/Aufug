@@ -80,6 +80,45 @@ function snapshotInPage(maxText) {
   };
 }
 
+// يُنفَّذ داخل الصفحة: روابط تنقل ظاهرة من نفس الموقع، مرتبة حسب أهميتها في الواجهة.
+function navCandidatesInPage() {
+  const SKIP = /(logout|log-out|signout|sign-out|تسجيل\s*الخروج|خروج|delete|حذف|unsubscribe)/i;
+  const FILES = /\.(pdf|zip|rar|exe|dmg|apk|docx?|xlsx?|pptx?|png|jpe?g|gif|svg|mp4|mp3)$/i;
+  const visible = (el) => {
+    const s = window.getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    return s.display !== 'none' && s.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+  };
+  const here = location.origin + location.pathname + location.search;
+  const seen = new Set();
+  const out = [];
+  document.querySelectorAll('a[href]').forEach((a, i) => {
+    if (!visible(a)) return;
+    let u;
+    try {
+      u = new URL(a.getAttribute('href'), location.href);
+    } catch {
+      return;
+    }
+    if (!/^https?:$/.test(u.protocol) || u.origin !== location.origin) return;
+    const key = u.pathname.replace(/\/$/, '') + u.search;
+    const text = (a.getAttribute('aria-label') || a.innerText || a.title || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    if (seen.has(key) || u.origin + u.pathname + u.search === here) return;
+    if (SKIP.test(text) || SKIP.test(u.pathname) || FILES.test(u.pathname)) return;
+    seen.add(key);
+    let score = 0;
+    if (a.closest('nav, header, [role=navigation], [role=menubar]')) score += 3;
+    if (a.closest('main, [role=main]')) score += 1;
+    if (/btn|button|cta|primary/i.test(a.className) || a.getAttribute('role') === 'button') score += 2;
+    if (a.closest('footer')) score -= 2;
+    if (!text) score -= 3;
+    out.push({ href: u.href, key, text, score, order: i });
+  });
+  return out.sort((a, b) => b.score - a.score || a.order - b.order);
+}
+
+const LOGIN_TEXT = /(تسجيل\s*الدخول|دخول|login|log\s*in|sign\s*in)/i;
+
 export async function collectFromUrl(input, onProgress = () => {}) {
   const browser = await chromium.launch({ headless: config.headless, executablePath: config.chromiumPath });
   let current = 0; // رقم الخطوة الجاري جمع أحداثها (0 = التحميل الأول)
@@ -190,6 +229,9 @@ export async function collectFromUrl(input, onProgress = () => {}) {
     });
     if (initialError) stoppedAt = 0;
 
+    const autoMode = input.steps.length === 0;
+    if (autoMode && !initialError) await autoExplore();
+
     for (const step of input.steps) {
       if (stoppedAt !== null) {
         steps.push({ number: step.number, text: step.text, status: 'not_run' });
@@ -220,16 +262,97 @@ export async function collectFromUrl(input, onProgress = () => {}) {
     await browser.close().catch(() => {});
   }
 
+  // استكشاف تلقائي حين لا يكتب المستخدم خطوات: تسجيل دخول بالحساب التجريبي إن وُجد،
+  // ثم فتح أهم روابط التنقل. لا يضغط أزرارًا تغيّر البيانات ولا يرسل نماذج غير نموذج الدخول.
+  async function autoExplore() {
+    let n = 0;
+    const record = async (text, fn) => {
+      n += 1;
+      current = n;
+      onProgress(`استكشاف تلقائي: الخطوة ${n}`);
+      const rec = { number: n, text, auto: true };
+      try {
+        rec.action_result = await fn();
+        rec.status = 'done';
+      } catch (e) {
+        rec.status = 'failed';
+        rec.error = String(e.message || e).split('\n')[0];
+      }
+      await settle();
+      rec.page = await snapshot();
+      steps.push(rec);
+      return rec;
+    };
+
+    const homeLinks = await page.evaluate(navCandidatesInPage).catch(() => []);
+
+    if (input.account.username && input.account.password) {
+      const passwordVisible = async () => (await page.locator('input[type=password]:visible').count()) > 0;
+      if (!(await passwordVisible())) {
+        const link = page.getByRole('link', { name: LOGIN_TEXT }).or(page.getByRole('button', { name: LOGIN_TEXT })).first();
+        if (await link.isVisible().catch(() => false)) {
+          await record('فتح صفحة تسجيل الدخول', async () => {
+            await link.click({ timeout });
+            return 'ضغط رابط تسجيل الدخول';
+          });
+        }
+      }
+      if (await passwordVisible()) {
+        await record('تسجيل الدخول بالحساب التجريبي', async () => {
+          const pwd = page.locator('input[type=password]:visible').first();
+          const form = pwd.locator('xpath=ancestor::form[1]');
+          const scope = (await form.count()) ? form : page;
+          const user = scope
+            .locator('input[type=email]:visible, input[type=text]:visible, input[type=tel]:visible, input:not([type]):visible')
+            .first();
+          if (!(await user.count())) throw new Error('لم يُعثر على حقل اسم المستخدم بجانب حقل كلمة المرور.');
+          await user.fill(input.account.username, { timeout });
+          await pwd.fill(input.account.password, { timeout });
+          const before = page.url();
+          await pwd.press('Enter');
+          await page.waitForURL((u) => u.toString() !== before, { timeout: 8000 }).catch(() => {});
+          await page.waitForLoadState('domcontentloaded', { timeout }).catch(() => {});
+          return `إرسال نموذج الدخول (${before === page.url() ? 'بقي على الصفحة نفسها' : 'انتقل إلى ' + page.url()})`;
+        });
+      } else {
+        await record('البحث عن نموذج تسجيل الدخول', async () => {
+          throw new Error('أُدخل حساب تجريبي لكن لم يُعثر على نموذج تسجيل دخول ظاهر.');
+        });
+      }
+    }
+
+    // روابط الصفحة الحالية (بعد الدخول إن حدث) أولًا، ثم روابط الصفحة الرئيسية
+    const afterLinks = steps.length > 1 ? await page.evaluate(navCandidatesInPage).catch(() => []) : [];
+    const visited = new Set(steps.map((st) => st.page && st.page.url).filter(Boolean).map((u) => u.split('#')[0]));
+    const seen = new Set();
+    const candidates = [...afterLinks, ...homeLinks]
+      .filter((l) => !visited.has(l.href.split('#')[0]) && !LOGIN_TEXT.test(l.text) && !seen.has(l.key) && seen.add(l.key))
+      .slice(0, config.autoMaxPages);
+    for (const c of candidates) {
+      await record(`افتح «${c.text || c.key}» (${c.key || '/'})`, async () => {
+        const res = await page.goto(c.href, { waitUntil: 'domcontentloaded', timeout: timeout * 2 });
+        const status = res ? res.status() : null;
+        if (status && status >= 400) throw new Error(`الصفحة ${c.key} أعادت الحالة ${status}.`);
+        return `فتح ${c.href}${status ? ` (الحالة ${status})` : ''}`;
+      });
+    }
+  }
+
   for (const s of steps) {
     s.network = network.get(s.number) || [];
     s.console_errors = consoleErrors.get(s.number) || [];
     s.tracking_calls = trackerCalls.get(s.number) || [];
   }
 
+  const auto = input.steps.length === 0;
+  const first = steps[0] && steps[0].page;
   return {
     source: 'url',
     target_url: input.url,
+    auto_explored: auto,
+    discovered_title: (first && first.title) || '',
     steps,
+    // في الاستكشاف التلقائي الرابط المعطوب دليل وليس توقفًا للرحلة؛ يتوقف فقط إن فشل فتح الموقع
     all_steps_executed: stoppedAt === null,
     stopped_at_step: stoppedAt,
   };

@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import express from 'express';
 import multer from 'multer';
 import { config, ROOT, ALLOWED_EXTENSIONS, modelConfigured } from './config.js';
-import { normalizeInput, validateInput } from './input.js';
+import { normalizeInput, validateInput, completeUrlInput } from './input.js';
 import { collectFromUrl } from './collectors/url.js';
 import { collectFromFiles } from './collectors/files.js';
 import { analyze } from './analyzer.js';
@@ -59,6 +59,7 @@ async function runJob(id, input, files, { recorded = null } = {}) {
   try {
     progress(input.source === 'url' ? 'تشغيل المتصفح' : 'قراءة الملفات');
     const collected = input.source === 'url' ? await collectFromUrl(input, progress) : await collectFromFiles(files);
+    if (input.source === 'url') completeUrlInput(input, collected);
     progress('تجهيز النتائج');
     const result = await analyze(input, collected, { recordedAnalysis: recorded, onProgress: progress });
     result.id = id;

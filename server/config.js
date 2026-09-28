@@ -19,6 +19,7 @@ export const config = {
   model: process.env.QA_MODEL || 'claude-opus-5',
   dataDir: path.join(ROOT, 'data'),
   demoDir: path.join(ROOT, 'demo'),
+  autoMaxPages: Number(process.env.AUTO_MAX_PAGES || 6),
   stepTimeoutMs: Number(process.env.STEP_TIMEOUT_MS || 10000),
   headless: process.env.HEADLESS !== 'false',
   chromiumPath: process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined,

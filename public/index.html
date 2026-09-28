@@ -8,113 +8,135 @@
 </head>
 <body>
 <header class="topbar">
-  <a href="/" class="brand">مراجعة جودة المنتج الرقمي</a>
-  <span id="model-status" class="pill"></span>
+  <a href="/" class="brand"><span class="logo" aria-hidden="true">◆</span> مراجعة جودة المنتج</a>
+  <span id="model-status" class="pill"><span class="dot"></span><span class="txt">…</span></span>
 </header>
 
-<main class="container">
+<main class="page">
   <form id="analyze-form" novalidate>
-    <h1>رحلة جديدة للمراجعة</h1>
-    <p class="lead">اختر مصدر الدليل، واكتب الرحلة المتوقعة، ثم ابدأ التحليل.</p>
+    <section class="hero">
+      <h1>راجع تجربة منتجك الرقمي</h1>
+      <p class="lead">ضع رابط بيئة الاختبار وابدأ. تفتح الأداة الموقع بمتصفح آلي، وتجمع النصوص والأزرار والأخطاء وطلبات الشبكة، ثم تعرض الملاحظات وتقرير PDF.</p>
 
-    <fieldset class="source-choice">
-      <legend>مصدر الدليل</legend>
-      <label class="choice">
-        <input type="radio" name="source" value="url" checked>
-        <span><strong>رابط الموقع</strong><small>تفتح الأداة الموقع بمتصفح آلي وتمشي الخطوات</small></span>
-      </label>
-      <label class="choice">
-        <input type="radio" name="source" value="file">
-        <span><strong>إرفاق ملف</strong><small>يعتمد التحليل على محتوى الملفات فقط</small></span>
-      </label>
-    </fieldset>
-
-    <section class="card" data-mode="url">
-      <h2>الموقع</h2>
-      <label class="field">
-        <span>رابط الموقع (بيئة الاختبار)</span>
-        <input type="url" name="url" dir="ltr" placeholder="https://staging.example.test">
-      </label>
-      <div class="row">
-        <label class="field">
-          <span>مستخدم الحساب التجريبي <em>اختياري</em></span>
-          <input name="test_username" dir="ltr" autocomplete="off">
-        </label>
-        <label class="field">
-          <span>كلمة مرور الحساب التجريبي <em>اختياري</em></span>
-          <input name="test_password" type="password" dir="ltr" autocomplete="new-password">
-        </label>
+      <div class="segmented" role="tablist" aria-label="مصدر الدليل">
+        <label class="seg"><input type="radio" name="source" value="url" checked><span>رابط الموقع</span></label>
+        <label class="seg"><input type="radio" name="source" value="file"><span>إرفاق ملفات</span></label>
       </div>
-    </section>
 
-    <section class="card" data-mode="file" hidden>
-      <h2>ملفات الدليل</h2>
-      <label class="dropzone" id="dropzone">
-        <input type="file" name="files" id="files" multiple accept=".png,.jpg,.jpeg,.txt,.md,.json,.har,.html,.htm">
-        <span>اسحب الملفات هنا أو اضغط للاختيار</span>
-        <small>png, jpg, txt, md, json, har, html — ملف واحد أو أكثر</small>
-      </label>
-      <ul id="file-list" class="file-list"></ul>
-    </section>
-
-    <section class="card">
-      <h2>الرحلة</h2>
-      <div class="row">
-        <label class="field">
-          <span>اسم المنتج</span>
-          <input name="product_name" required>
-        </label>
-        <label class="field">
-          <span>اسم الرحلة</span>
-          <input name="journey" required placeholder="مثال: التسجيل وإنشاء أول طلب">
-        </label>
+      <div class="url-bar" data-mode="url">
+        <input type="url" name="url" id="url" dir="ltr" placeholder="https://staging.example.com" aria-label="رابط الموقع" autocomplete="url">
+        <button type="submit" class="primary big">ابدأ التحليل</button>
       </div>
-      <label class="field">
-        <span>خطوات الرحلة <em>خطوة في كل سطر</em></span>
-        <textarea name="steps" rows="6" required></textarea>
-      </label>
-      <details class="hint" data-mode="url">
-        <summary>صيغ الخطوات التي ينفذها المتصفح الآلي</summary>
-        <table>
-          <tr><td dir="ltr">افتح /login</td><td>فتح مسار أو رابط</td></tr>
-          <tr><td>اضغط «تسجيل الدخول»</td><td>ضغط زر أو رابط بنصه الظاهر</td></tr>
-          <tr><td>اكتب «{{username}}» في «البريد الإلكتروني»</td><td>تعبئة حقل بتسميته أو placeholder أو name</td></tr>
-          <tr><td>اختر «الرياض» من «المدينة»</td><td>اختيار من قائمة</td></tr>
-          <tr><td>فعّل «أوافق على الشروط»</td><td>تفعيل خانة اختيار</td></tr>
-          <tr><td>اضغط مفتاح Enter</td><td>ضغط مفتاح</td></tr>
-          <tr><td>انتظر «تم الحفظ» · انتظر 2 ثانية</td><td>انتظار نص أو مدة</td></tr>
-          <tr><td>تحقق من ظهور «رقم الطلب»</td><td>التحقق من ظهور نص</td></tr>
-        </table>
-        <p><code dir="ltr">{{username}}</code> و<code dir="ltr">{{password}}</code> تُستبدل ببيانات الحساب التجريبي. أي خطوة بصيغة أخرى تُسجل خطوةً تعذر تنفيذها وتتوقف الرحلة عندها.</p>
-      </details>
-      <label class="field">
-        <span>شرط النجاح <em>جملة واحدة</em></span>
-        <input name="success_condition" required placeholder="مثال: تظهر صفحة تأكيد تحتوي رقم الطلب">
-      </label>
-      <label class="field">
-        <span>القصص والميزات المتوقعة <em>بند في كل سطر</em></span>
-        <textarea name="expected_features" rows="4"></textarea>
-      </label>
-      <label class="field">
-        <span>أحداث التحليلات المتوقعة <em>سطر لكل حدث: اسم_الحدث — متى يُطلق</em></span>
-        <textarea name="expected_events" rows="4" placeholder="sign_up — عند إنشاء الحساب"></textarea>
-      </label>
+      <p class="hint-line" data-mode="url">بدون خطوات مكتوبة تستكشف الأداة الموقع تلقائيًا: تسجّل الدخول إن أدخلت حسابًا تجريبيًا، ثم تفتح أهم صفحات التنقل.</p>
+
+      <div data-mode="file" hidden>
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="files" multiple accept=".png,.jpg,.jpeg,.txt,.md,.json,.har,.html,.htm">
+          <span class="dz-icon" aria-hidden="true">⇪</span>
+          <strong>اسحب ملفات الدليل هنا أو اضغط للاختيار</strong>
+          <small>png · jpg · txt · md · json · har · html</small>
+        </label>
+        <ul id="file-list" class="file-chips"></ul>
+      </div>
     </section>
 
     <div id="form-errors" class="errors" role="alert" hidden></div>
 
-    <div class="actions">
-      <button type="submit" class="primary">ابدأ التحليل</button>
-      <button type="button" id="load-demo" class="secondary">تعبئة بيانات التجربة</button>
-      <a href="/results.html?id=demo" class="link">فتح نتيجة التجربة مباشرة</a>
+    <details class="panel options" id="journey-box">
+      <summary>
+        <span class="sum-title" id="journey-title">تخصيص الرحلة</span>
+        <span class="sum-badge" id="journey-badge">اختياري</span>
+      </summary>
+
+      <div class="options-body">
+        <div class="grid-2" data-mode="url">
+          <label class="field">
+            <span>مستخدم الحساب التجريبي</span>
+            <input name="test_username" dir="ltr" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>كلمة مرور الحساب التجريبي</span>
+            <input name="test_password" type="password" dir="ltr" autocomplete="new-password">
+          </label>
+        </div>
+
+        <div class="grid-2">
+          <label class="field">
+            <span>اسم المنتج</span>
+            <input name="product_name" placeholder="يؤخذ من عنوان الموقع إن تُرك فارغًا" data-file-placeholder="مثال: متجر نخيل">
+          </label>
+          <label class="field">
+            <span>اسم الرحلة</span>
+            <input name="journey" placeholder="مثال: التسجيل وإنشاء أول طلب">
+          </label>
+        </div>
+
+        <label class="field">
+          <span>خطوات الرحلة <em>خطوة في كل سطر</em></span>
+          <textarea name="steps" rows="5" placeholder="اضغط «تسجيل الدخول»&#10;اكتب «{{username}}» في «البريد الإلكتروني»&#10;اكتب «{{password}}» في «كلمة المرور»&#10;اضغط «دخول»&#10;تحقق من ظهور «لوحة التحكم»"></textarea>
+        </label>
+        <details class="syntax" data-mode="url">
+          <summary>الصيغ التي ينفذها المتصفح الآلي</summary>
+          <table>
+            <tr><td>افتح /login</td><td>فتح مسار أو رابط</td></tr>
+            <tr><td>اضغط «تسجيل الدخول»</td><td>ضغط زر أو رابط بنصه الظاهر</td></tr>
+            <tr><td>اكتب «{{username}}» في «البريد الإلكتروني»</td><td>تعبئة حقل بتسميته أو placeholder أو name</td></tr>
+            <tr><td>اختر «الرياض» من «المدينة»</td><td>اختيار من قائمة</td></tr>
+            <tr><td>فعّل «أوافق على الشروط»</td><td>تفعيل خانة اختيار</td></tr>
+            <tr><td>اضغط مفتاح Enter</td><td>ضغط مفتاح</td></tr>
+            <tr><td>انتظر «تم الحفظ» · انتظر 2 ثانية</td><td>انتظار نص أو مدة</td></tr>
+            <tr><td>تحقق من ظهور «رقم الطلب»</td><td>التحقق من ظهور نص</td></tr>
+          </table>
+          <p><code>{{username}}</code> و<code>{{password}}</code> تُستبدل ببيانات الحساب التجريبي. أي خطوة بصيغة أخرى تُسجل خطوةً تعذر تنفيذها وتتوقف الرحلة عندها.</p>
+        </details>
+
+        <label class="field">
+          <span>شرط النجاح <em>جملة واحدة</em></span>
+          <input name="success_condition" placeholder="مثال: تظهر صفحة تأكيد تحتوي رقم الطلب">
+        </label>
+        <div class="grid-2">
+          <label class="field">
+            <span>القصص والميزات المتوقعة <em>بند في كل سطر</em></span>
+            <textarea name="expected_features" rows="4"></textarea>
+          </label>
+          <label class="field">
+            <span>أحداث التحليلات المتوقعة <em>اسم_الحدث — متى</em></span>
+            <textarea name="expected_events" rows="4" placeholder="sign_up — عند إنشاء الحساب"></textarea>
+          </label>
+        </div>
+      </div>
+    </details>
+
+    <div class="actions" data-mode="file" hidden>
+      <button type="submit" class="primary big">ابدأ التحليل</button>
     </div>
+
+    <section class="how">
+      <div><span class="n">1</span><strong>اجمع الدليل</strong><small>متصفح آلي يمشي على الموقع، أو ملفات ترفعها</small></div>
+      <div><span class="n">2</span><strong>حلّل</strong><small>ملاحظات مرتبطة بدليل فقط، بلا تخمين</small></div>
+      <div><span class="n">3</span><strong>صدّر التقرير</strong><small>مستند PDF جاهز للمشاركة</small></div>
+    </section>
+
+    <p class="demo-line">
+      تجربة سريعة:
+      <button type="button" id="load-demo" class="linkish">تعبئة بيانات التجربة</button>
+      أو
+      <a href="/results.html?id=demo">فتح نتيجة التجربة مباشرة</a>
+    </p>
   </form>
 
   <section id="waiting" class="waiting" hidden aria-live="polite">
-    <div class="spinner" aria-hidden="true"></div>
-    <h2>جارٍ التحليل</h2>
-    <p id="progress">في الانتظار</p>
-    <p class="muted">قد يستغرق وضع الرابط عدة دقائق حسب عدد الخطوات.</p>
+    <div class="wait-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <h2>جارٍ التحليل</h2>
+      <p id="progress" class="progress-text">في الانتظار</p>
+      <ol class="stages" id="stages">
+        <li data-stage="collect">جمع الدليل</li>
+        <li data-stage="analyze">التحليل</li>
+        <li data-stage="finish">تجهيز النتائج</li>
+      </ol>
+      <p class="muted small">قد يستغرق وضع الرابط دقيقة أو أكثر حسب عدد الصفحات.</p>
+    </div>
   </section>
 </main>
 
