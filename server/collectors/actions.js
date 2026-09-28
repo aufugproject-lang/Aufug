@@ -2,6 +2,10 @@
 // الصيغ المدعومة موثقة في واجهة الإدخال. أي خطوة لا تطابق صيغة معروفة
 // تُسجَّل كخطوة تعذر تنفيذها بدل تخمين معناها.
 
+import { t } from '../i18n.js';
+
+const fail = (msg, code) => Object.assign(new Error(msg), { code });
+
 const Q = `["«“'](.+?)["»”']`;
 
 const PATTERNS = [
@@ -62,12 +66,12 @@ function fieldCandidates(page, field) {
   ];
 }
 
-export async function runAction(page, action, account, baseUrl, timeout) {
+export async function runAction(page, action, account, baseUrl, timeout, lang = 'ar') {
   switch (action.type) {
     case 'goto': {
       const target = new URL(substitute(action.target, account), baseUrl).toString();
       await page.goto(target, { waitUntil: 'domcontentloaded', timeout: timeout * 2 });
-      return `فتح ${target}`;
+      return t(lang, 'act.goto', { url: target });
     }
     case 'click': {
       const text = substitute(action.text, account);
@@ -85,47 +89,47 @@ export async function runAction(page, action, account, baseUrl, timeout) {
         ],
         timeout,
       );
-      if (!el) throw new Error(`لم يُعثر على عنصر ظاهر قابل للضغط بالنص «${text}».`);
+      if (!el) throw fail(t(lang, 'err.no_click', { text }), 'not_found');
       await el.click({ timeout });
-      return `ضغط «${text}»`;
+      return t(lang, 'act.click', { text });
     }
     case 'fill': {
       const el = await firstVisible(fieldCandidates(page, action.field), timeout);
-      if (!el) throw new Error(`لم يُعثر على حقل ظاهر باسم أو تسمية «${action.field}».`);
+      if (!el) throw fail(t(lang, 'err.no_field', { field: action.field }), 'not_found');
       await el.fill(substitute(action.value, account), { timeout });
       const shown = /\{\{\s*(password|pass|كلمة_المرور)/i.test(action.value) ? '••••' : substitute(action.value, account);
-      return `كتابة «${shown}» في «${action.field}»`;
+      return t(lang, 'act.fill', { value: shown, field: action.field });
     }
     case 'select': {
       const el = await firstVisible(fieldCandidates(page, action.field), timeout);
-      if (!el) throw new Error(`لم يُعثر على قائمة ظاهرة باسم «${action.field}».`);
+      if (!el) throw fail(t(lang, 'err.no_select', { field: action.field }), 'not_found');
       const value = substitute(action.value, account);
       await el.selectOption({ label: value }, { timeout }).catch(() => el.selectOption(value, { timeout }));
-      return `اختيار «${value}» من «${action.field}»`;
+      return t(lang, 'act.select', { value, field: action.field });
     }
     case 'check': {
       const el = await firstVisible(
         [page.getByLabel(action.field, { exact: true }), page.getByRole('checkbox', { name: action.field }), page.getByLabel(action.field)],
         timeout,
       );
-      if (!el) throw new Error(`لم يُعثر على خانة اختيار باسم «${action.field}».`);
+      if (!el) throw fail(t(lang, 'err.no_check', { field: action.field }), 'not_found');
       await el.check({ timeout });
-      return `تفعيل «${action.field}»`;
+      return t(lang, 'act.check', { field: action.field });
     }
     case 'press':
       await page.keyboard.press(action.key);
-      return `ضغط مفتاح ${action.key}`;
+      return t(lang, 'act.press', { key: action.key });
     case 'wait_ms':
       await page.waitForTimeout(action.ms);
-      return `انتظار ${action.ms / 1000} ثانية`;
+      return t(lang, 'act.wait', { s: action.ms / 1000 });
     case 'wait_text':
     case 'expect': {
       const text = substitute(action.text, account);
       const el = await firstVisible([page.getByText(text, { exact: false })], timeout);
-      if (!el) throw new Error(`النص «${text}» لم يظهر في الصفحة خلال ${Math.round(timeout / 1000)} ثوانٍ.`);
-      return `ظهور «${text}»`;
+      if (!el) throw fail(t(lang, 'err.text_missing', { text, s: Math.round(timeout / 1000) }), 'text_missing');
+      return t(lang, 'act.seen', { text });
     }
     default:
-      throw new Error('نوع إجراء غير معروف.');
+      throw new Error(t(lang, 'err.unknown_action'));
   }
 }

@@ -1,6 +1,7 @@
 // محلل بقواعد ثابتة: يعمل دائمًا، بدون نموذج ذكاء اصطناعي.
 // كل ملاحظة هنا مشتقة مباشرة من عنصر محدد في الدليل المجموع، ولا تُبنى على افتراضات.
 // ما لا تستطيع القواعد الحكم عليه (جودة المحتوى، اكتمال الميزات، الصور) يذهب إلى insufficient_evidence.
+import { t, list as tlist } from './i18n.js';
 
 const ASSET_RE = /\.(ico|png|jpe?g|gif|svg|webp|woff2?|ttf|css|map)(\?|$)/i;
 
@@ -21,11 +22,6 @@ function pathOf(u) {
   }
 }
 
-const list = (arr, n = 5) => {
-  const shown = arr.slice(0, n).join('، ');
-  return arr.length > n ? `${shown} و${arr.length - n} غيرها` : shown;
-};
-
 function finding(input, f) {
   return {
     journey: input.journey,
@@ -43,279 +39,163 @@ function finding(input, f) {
   };
 }
 
+// ملاحظة من قاعدة: النصوص الثلاثة (دليل، أثر، توصية) من مفاتيح الترجمة
+function push(ctx, out, base, key, params = {}, impactKey = `${key}.i`) {
+  const L = ctx.lang;
+  out.push({
+    ...base,
+    step: ctx.step,
+    source: ctx.source,
+    evidence: t(L, `${key}.e`, params),
+    impact: t(L, impactKey),
+    recommendation: t(L, `${key}.r`),
+  });
+}
+
 // ---------- قواعد مشتركة لصفحة (لقطة من المتصفح أو ملف HTML) ----------
 
 function pageRules(page, ctx, out) {
-  const { step, source, seenPages } = ctx; // ctx مشترك عبر الصفحات حتى لا تتكرر ملاحظات الوصول
-  const pageKey = page.url || source;
-
+  const L = ctx.lang;
   // رسالة الخطأ نفسها قد تبقى ظاهرة عبر عدة خطوات؛ تُسجل عند أول ظهور فقط
-  ctx.seenErrors ||= new Set();
   const newErrors = (page.error_messages || []).filter((m) => !ctx.seenErrors.has(m));
   newErrors.forEach((m) => ctx.seenErrors.add(m));
-  if (newErrors.length) {
-    out.push({
-      rule: 'visible_error',
-      criterion: 'UX',
-      severity: 'medium',
-      confidence: 'medium',
-      step,
-      source,
-      evidence: `ظهرت رسائل خطأ في الصفحة: «${list(newErrors, 3)}».`,
-      impact: 'المستخدم يواجه خطأ ظاهرًا أثناء الرحلة وقد لا يعرف كيف يكمل.',
-      recommendation: 'راجع سبب الرسالة، واكتبها بلغة واضحة تذكر ما حدث وما الخطوة التالية.',
+  if (newErrors.length)
+    push(ctx, out, { rule: 'visible_error', criterion: 'UX', severity: 'medium', confidence: 'medium' }, 'r.visible_error', {
+      list: tlist(L, newErrors, 3),
     });
-  }
 
   // ملاحظات الوصول تُسجل مرة واحدة لكل صفحة حتى لا تتكرر مع كل خطوة
-  if (seenPages.has(pageKey)) return;
-  seenPages.add(pageKey);
+  const pageKey = page.url || ctx.source;
+  if (ctx.seenPages.has(pageKey)) return;
+  ctx.seenPages.add(pageKey);
   const a = page.accessibility || {};
-  if (a.unlabeled_fields && a.unlabeled_fields.length) {
-    out.push({
-      rule: 'unlabeled_fields',
-      criterion: 'accessibility',
-      severity: 'medium',
-      confidence: 'high',
-      step,
-      source,
-      evidence: `حقول إدخال بلا تسمية (label أو aria-label): ${list(a.unlabeled_fields)}.`,
-      impact: 'مستخدمو قارئات الشاشة لا يعرفون غرض الحقل، فيكملون التعبئة بصعوبة.',
-      recommendation: 'اربط كل حقل بعنصر label ظاهر أو أضف aria-label يصف الحقل.',
+  if (a.unlabeled_fields && a.unlabeled_fields.length)
+    push(ctx, out, { rule: 'unlabeled_fields', criterion: 'accessibility', severity: 'medium', confidence: 'high' }, 'r.unlabeled', {
+      list: tlist(L, a.unlabeled_fields),
     });
-  }
-  if (a.unnamed_buttons > 0) {
-    out.push({
-      rule: 'unnamed_buttons',
-      criterion: 'accessibility',
-      severity: 'medium',
-      confidence: 'high',
-      step,
-      source,
-      evidence: `${a.unnamed_buttons} زر بلا اسم نصي أو aria-label.`,
-      impact: 'قارئ الشاشة يعلن الزر بلا وصف، فلا يعرف المستخدم ما يفعله.',
-      recommendation: 'أضف نصًا ظاهرًا أو aria-label لكل زر أيقونة.',
-    });
-  }
-  if (a.images_without_alt > 0) {
-    out.push({
-      rule: 'images_without_alt',
-      criterion: 'accessibility',
-      severity: 'low',
-      confidence: 'high',
-      step,
-      source,
-      evidence: `${a.images_without_alt} صورة بلا خاصية alt.`,
-      impact: 'المحتوى البصري غير متاح لمستخدمي قارئات الشاشة، دون أن يوقف المهمة.',
-      recommendation: 'أضف alt وصفيًا للصور ذات المعنى، و alt فارغًا للصور الزخرفية.',
-    });
-  }
+  if (a.unnamed_buttons > 0)
+    push(ctx, out, { rule: 'unnamed_buttons', criterion: 'accessibility', severity: 'medium', confidence: 'high' }, 'r.unnamed', { n: a.unnamed_buttons });
+  if (a.images_without_alt > 0)
+    push(ctx, out, { rule: 'images_without_alt', criterion: 'accessibility', severity: 'low', confidence: 'high' }, 'r.alt', { n: a.images_without_alt });
   if (page.lang === '' && !ctx.langReported) {
     ctx.langReported = true;
-    out.push({
-      rule: 'missing_lang',
-      criterion: 'accessibility',
-      severity: 'low',
-      confidence: 'high',
-      step,
-      source,
-      evidence: 'عنصر html بلا خاصية lang.',
-      impact: 'قارئات الشاشة قد تنطق المحتوى بلغة خاطئة.',
-      recommendation: 'أضف lang="ar" (أو لغة الصفحة الفعلية) إلى عنصر html.',
-    });
+    push(ctx, out, { rule: 'missing_lang', criterion: 'accessibility', severity: 'low', confidence: 'high' }, 'r.lang');
   }
+}
+
+function networkRules(ctx, out, requests) {
+  const L = ctx.lang;
+  const fmt = (r) => `${r.method} ${pathOf(r.url)} → ${r.status}`;
+  const serverErr = requests.filter((r) => r.status >= 500);
+  const clientErr = requests.filter((r) => r.status >= 400 && r.status < 500 && r.status !== 401 && r.status !== 403);
+  if (serverErr.length) {
+    const writes = serverErr.some((r) => r.method !== 'GET');
+    push(
+      ctx,
+      out,
+      { rule: 'server_error', criterion: 'friction', severity: writes ? 'high' : 'medium', confidence: 'high' },
+      'r.server',
+      { list: tlist(L, serverErr.map((r) => fmt(r) + (r.response_excerpt ? ` ${r.response_excerpt.slice(0, 80)}` : '')), 4) },
+      writes ? 'r.server.iw' : 'r.server.ir',
+    );
+  }
+  if (clientErr.length)
+    push(ctx, out, { rule: 'client_error', criterion: 'friction', severity: 'medium', confidence: 'medium' }, 'r.client', {
+      list: tlist(L, clientErr.map(fmt), 4),
+    });
 }
 
 // ---------- وضع الرابط ----------
 
-function urlRules(input, collected, out, insufficient) {
-  const ctx = { seenPages: new Set(), langReported: false };
+function urlRules(input, collected, out, insufficient, ctx) {
+  const L = ctx.lang;
   const base = collected.target_url;
   for (const s of collected.steps) {
-    const source = `step:${s.number}`;
-    const step = s.number;
+    ctx.step = s.number;
+    ctx.source = `step:${s.number}`;
 
     if (s.status === 'failed') {
       if (s.number === 0) {
-        out.push({
-          rule: 'site_unreachable',
-          criterion: 'friction',
-          severity: 'high',
-          confidence: 'high',
-          step,
-          source,
-          evidence: `تعذر فتح الرابط: ${s.error}`,
-          impact: 'لا يمكن بدء الرحلة أصلًا.',
-          recommendation: 'تأكد أن بيئة الاختبار تعمل ومتاحة من الشبكة، ثم أعد التحليل.',
-        });
-      } else if (s.auto && /أعادت الحالة (\d+)/.test(s.error || '')) {
-        const code = Number(s.error.match(/أعادت الحالة (\d+)/)[1]);
-        out.push({
-          rule: 'broken_link',
-          criterion: 'navigation',
-          severity: code >= 500 ? 'high' : 'medium',
-          confidence: 'high',
-          step,
-          source,
-          evidence: `رابط التنقل ${s.text.replace(/^افتح\s*/, "")} يؤدي إلى صفحة أعادت الحالة ${code}.`,
-          impact: code >= 500 ? 'خطأ خادم يمنع الوصول إلى الصفحة.' : 'المستخدم يصل إلى صفحة غير موجودة ويضطر للرجوع.',
-          recommendation: 'أصلح الرابط أو الصفحة الهدف، أو أزل الرابط من التنقل.',
-        });
+        push(ctx, out, { rule: 'site_unreachable', criterion: 'friction', severity: 'high', confidence: 'high' }, 'r.unreachable', { err: s.error });
+      } else if (s.auto && s.http_status) {
+        const code = s.http_status;
+        const q = L === 'en' ? ['“', '”'] : ['«', '»'];
+        const link = s.link ? `${q[0]}${s.link.text}${q[1]} (${s.link.path})` : s.text;
+        push(
+          ctx,
+          out,
+          { rule: 'broken_link', criterion: 'navigation', severity: code >= 500 ? 'high' : 'medium', confidence: 'high' },
+          'r.broken',
+          { link, code },
+          code >= 500 ? 'r.broken.i5' : 'r.broken.i4',
+        );
       } else if (s.auto) {
-        out.push({
-          rule: 'auto_step_failed',
-          criterion: 'friction',
-          severity: /تسجيل الدخول/.test(s.text) ? 'high' : 'medium',
-          confidence: 'medium',
-          step,
-          source,
-          evidence: `تعذر «${s.text}»: ${s.error}`,
-          impact: 'المستخدم قد لا يستطيع إكمال هذه الخطوة.',
-          recommendation: 'تحقق يدويًا من الخطوة؛ إن كانت الأداة لم تتعرف على العناصر فاكتب خطوات الرحلة صراحة.',
-        });
-      } else if (!s.action) {
-        insufficient.push(`الخطوة ${s.number} «${s.text}» مكتوبة بصيغة لا ينفذها المتصفح الآلي، فتوقفت الرحلة عندها دون حكم على المنتج.`);
+        push(
+          ctx,
+          out,
+          { rule: 'auto_step_failed', criterion: 'friction', severity: s.kind === 'login' ? 'high' : 'medium', confidence: 'medium' },
+          'r.auto_failed',
+          { step: s.text, err: s.error },
+        );
+      } else if (s.error_code === 'unsupported' || !s.action) {
+        insufficient.push(t(L, 'r.unsupported.ins', { n: s.number, step: s.text }));
       } else {
-        out.push({
-          rule: 'journey_step_failed',
-          criterion: 'friction',
-          severity: 'high',
-          confidence: /لم يُعثر على/.test(s.error || '') ? 'medium' : 'high',
-          step,
-          source,
-          evidence: `تعذر تنفيذ الخطوة «${s.text}»: ${s.error}`,
-          impact: 'الرحلة لا تكتمل عند هذه الخطوة.',
-          recommendation: 'تحقق من ظهور العنصر المطلوب بالنص نفسه، ومن عدم وجود خطأ يمنع الانتقال.',
-        });
+        push(
+          ctx,
+          out,
+          { rule: 'journey_step_failed', criterion: 'friction', severity: 'high', confidence: s.error_code === 'not_found' ? 'medium' : 'high' },
+          'r.step_failed',
+          { step: s.text, err: s.error },
+        );
       }
     }
 
-    // طلبات الشبكة الفاشلة من نفس الموقع (بدون الملفات الثابتة)
-    const failed = (s.network || []).filter(
-      (n) => sameOrigin(n.url, base) && !ASSET_RE.test(n.url) && n.status && n.status >= 400 && !(s.status === 'failed' && n.type === 'document'),
+    // طلبات الشبكة الفاشلة من نفس الموقع (بدون الملفات الثابتة، وبدون صفحة الرابط المعطوب نفسها)
+    const reqs = (s.network || []).filter(
+      (n) => sameOrigin(n.url, base) && !ASSET_RE.test(n.url) && n.status && !(s.status === 'failed' && n.type === 'document'),
     );
-    const serverErr = failed.filter((n) => n.status >= 500);
-    const clientErr = failed.filter((n) => n.status < 500 && n.status !== 401 && n.status !== 403);
-    if (serverErr.length) {
-      const writes = serverErr.some((n) => n.method !== 'GET');
-      out.push({
-        rule: 'server_error',
-        criterion: 'friction',
-        severity: writes ? 'high' : 'medium',
-        confidence: 'high',
-        step,
-        source,
-        evidence: `طلبات أعادت خطأ خادم: ${list(serverErr.map((n) => `${n.method} ${pathOf(n.url)} → ${n.status}`), 4)}.`,
-        impact: writes ? 'بيانات أرسلها المستخدم لم تُحفظ، فقد تضيع أو تتوقف الرحلة.' : 'جزء من محتوى الصفحة لم يُحمّل.',
-        recommendation: 'راجع سجلات الخادم لهذه الطلبات، وأظهر للمستخدم رسالة واضحة مع إمكانية إعادة المحاولة.',
-      });
-    }
-    if (clientErr.length) {
-      out.push({
-        rule: 'client_error',
-        criterion: 'friction',
-        severity: 'medium',
-        confidence: 'medium',
-        step,
-        source,
-        evidence: `طلبات أعادت أخطاء 4xx: ${list(clientErr.map((n) => `${n.method} ${pathOf(n.url)} → ${n.status}`), 4)}.`,
-        impact: 'وظيفة في الصفحة قد لا تعمل كما يتوقع المستخدم.',
-        recommendation: 'تحقق من صحة الطلبات ومساراتها، ومن معالجة الرد في الواجهة.',
-      });
-    }
+    networkRules(ctx, out, reqs);
 
     const jsErrors = (s.console_errors || []).filter((m) => !/Failed to load resource/i.test(m));
-    if (jsErrors.length) {
-      out.push({
-        rule: 'js_errors',
-        criterion: 'UX',
-        severity: 'low',
-        confidence: 'medium',
-        step,
-        source,
-        evidence: `أخطاء JavaScript في الكونسول: ${list(jsErrors.map((m) => `«${m.slice(0, 120)}»`), 3)}.`,
-        impact: 'قد تتعطل عناصر تفاعلية في الصفحة دون أن يظهر ذلك للمستخدم مباشرة.',
-        recommendation: 'أصلح الأخطاء البرمجية الظاهرة في الكونسول وتحقق من أثرها على الواجهة.',
+    if (jsErrors.length)
+      push(ctx, out, { rule: 'js_errors', criterion: 'UX', severity: 'low', confidence: 'medium' }, 'r.js', {
+        list: tlist(L, jsErrors.map((m) => (L === 'en' ? `“${m.slice(0, 120)}”` : `«${m.slice(0, 120)}»`)), 3),
       });
-    }
 
     // صفحة رابط معطوب ليست صفحة من المنتج، فلا تُفحص
-    if (s.page && !s.page.snapshot_error && !(s.auto && s.status === 'failed')) {
-      ctx.step = step;
-      ctx.source = source;
-      pageRules(s.page, ctx, out);
-    }
+    if (s.page && !s.page.snapshot_error && !(s.auto && s.status === 'failed')) pageRules(s.page, ctx, out);
   }
 }
 
 // ---------- وضع الملفات ----------
 
-function fileRules(input, collected, out, insufficient) {
-  const ctx = { seenPages: new Set(), langReported: false };
+function fileRules(input, collected, out, insufficient, ctx) {
+  const L = ctx.lang;
+  ctx.step = 0;
   for (const f of collected.files) {
-    const source = `file:${f.file}`;
+    ctx.source = `file:${f.file}`;
     if (f.har) {
-      const reqs = f.har.requests.filter((r) => !ASSET_RE.test(r.url));
-      const serverErr = reqs.filter((r) => r.status >= 500);
-      const clientErr = reqs.filter((r) => r.status >= 400 && r.status < 500 && r.status !== 401 && r.status !== 403);
-      if (serverErr.length) {
-        const writes = serverErr.some((r) => r.method !== 'GET');
-        out.push({
-          rule: 'server_error',
-          criterion: 'friction',
-          severity: writes ? 'high' : 'medium',
-          confidence: 'high',
-          step: 0,
-          source,
-          evidence: `طلبات أعادت خطأ خادم: ${list(serverErr.map((r) => `${r.method} ${pathOf(r.url)} → ${r.status}${r.response_excerpt ? ` ${r.response_excerpt.slice(0, 80)}` : ''}`), 4)}.`,
-          impact: writes ? 'بيانات أرسلها المستخدم لم تُحفظ، فقد تضيع أو تتوقف الرحلة.' : 'جزء من المحتوى لم يُحمّل.',
-          recommendation: 'راجع سجلات الخادم لهذه الطلبات، وأظهر للمستخدم رسالة واضحة مع إمكانية إعادة المحاولة.',
-        });
-      }
-      if (clientErr.length) {
-        out.push({
-          rule: 'client_error',
-          criterion: 'friction',
-          severity: 'medium',
-          confidence: 'medium',
-          step: 0,
-          source,
-          evidence: `طلبات أعادت أخطاء 4xx: ${list(clientErr.map((r) => `${r.method} ${pathOf(r.url)} → ${r.status}`), 4)}.`,
-          impact: 'وظيفة قد لا تعمل كما يتوقع المستخدم.',
-          recommendation: 'تحقق من صحة الطلبات ومساراتها، ومن معالجة الرد في الواجهة.',
-        });
-      }
+      networkRules(ctx, out, f.har.requests.filter((r) => !ASSET_RE.test(r.url)));
     } else if (f.html) {
-      ctx.step = 0;
-      ctx.source = source;
-      pageRules({ ...f.html, url: source }, ctx, out);
+      pageRules({ ...f.html, url: ctx.source }, ctx, out);
     } else if (f.kind === 'text' && f.type === 'txt') {
       const errs = f.content.text.split(/\r?\n/).filter((l) => /(Uncaught|TypeError|ReferenceError|Exception|\bError\b)/.test(l));
-      if (errs.length) {
-        out.push({
-          rule: 'log_errors',
-          criterion: 'UX',
-          severity: 'low',
-          confidence: 'medium',
-          step: 0,
-          source,
-          evidence: `أسطر أخطاء في السجل: ${list(errs.map((l) => `«${l.trim().slice(0, 120)}»`), 3)}.`,
-          impact: 'أخطاء تقنية قد تعطل أجزاء من الرحلة.',
-          recommendation: 'تتبع هذه الأخطاء وأصلحها، وتحقق من أثرها على ما يراه المستخدم.',
+      if (errs.length)
+        push(ctx, out, { rule: 'log_errors', criterion: 'UX', severity: 'low', confidence: 'medium' }, 'r.log', {
+          list: tlist(L, errs.map((l) => (L === 'en' ? `“${l.trim().slice(0, 120)}”` : `«${l.trim().slice(0, 120)}»`)), 3),
         });
-      }
     }
   }
-  insufficient.push('ربط الملاحظات الآلية بخطوات الرحلة غير ممكن من الملفات بالقواعد وحدها؛ سُجلت على الخطوة 0 (عام).');
+  insufficient.push(t(L, 'r.files_step0'));
 }
 
 export function ruleFindings(input, collected) {
   const raw = [];
   const insufficient = [];
-  if (collected.source === 'url') urlRules(input, collected, raw, insufficient);
-  else fileRules(input, collected, raw, insufficient);
-  if (input.expected_features.length)
-    insufficient.push('مقارنة القصص والميزات المتوقعة بما ظهر في الموقع تحتاج حكم النموذج؛ القواعد الآلية لا تحكم عليها.');
+  const ctx = { lang: input.lang || 'ar', seenPages: new Set(), seenErrors: new Set(), langReported: false };
+  if (collected.source === 'url') urlRules(input, collected, raw, insufficient, ctx);
+  else fileRules(input, collected, raw, insufficient, ctx);
+  if (input.expected_features.length) insufficient.push(t(ctx.lang, 'r.features_model'));
   const order = { high: 0, medium: 1, low: 2 };
   const findings = raw.map((f) => finding(input, f)).sort((a, b) => order[a.severity] - order[b.severity] || a.step - b.step);
   return { findings, insufficient };

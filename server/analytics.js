@@ -1,3 +1,5 @@
+import { t } from './i18n.js';
+
 // فحص آلي لوجود أحداث التحليلات المتوقعة داخل الدليل المجموع فقط.
 // لا يحكم على جودة التتبع؛ يجيب فقط: هل ظهر اسم الحدث في الدليل أم لا.
 
@@ -64,32 +66,23 @@ export function checkAnalytics(expectedEvents, collected) {
 }
 
 // النتيجة الآلية قبل حكم النموذج: ناقص مؤكد، أو دليل غير كافٍ
-export function deterministicAnalytics(checks, collected) {
+export function deterministicAnalytics(checks, collected, lang = 'ar') {
   const missing = [];
   const insufficient = [];
   const networkSources = hasNetworkEvidence(collected);
   for (const c of checks) {
     if (c.observed) continue;
     if (collected.auto_explored) {
-      insufficient.push(
-        `لم يُرصد الحدث «${c.event_name}» خلال الاستكشاف التلقائي، لكن الاستكشاف يفتح الصفحات فقط ولا ينفذ إجراءات، فلا يثبت غياب الحدث. اكتب خطوات الرحلة للتحقق منه.`,
-      );
+      insufficient.push(t(lang, 'an.ins_auto', { ev: c.event_name }));
     } else if (collected.source === 'url' && !collected.all_steps_executed) {
-      insufficient.push(
-        `لم يُتحقق من الحدث «${c.event_name}» لأن الرحلة توقفت عند الخطوة ${collected.stopped_at_step} قبل الوصول إلى جميع الخطوات.`,
-      );
+      insufficient.push(t(lang, 'an.ins_stopped', { ev: c.event_name, step: collected.stopped_at_step }));
     } else if (!networkSources) {
-      insufficient.push(
-        `لا توجد ملفات شبكة أو بيانات تتبع (har / json / سجل) للتحقق من إطلاق الحدث «${c.event_name}».`,
-      );
+      insufficient.push(t(lang, 'an.ins_no_net', { ev: c.event_name }));
     } else {
       missing.push({
         event_name: c.event_name,
-        when: c.when || 'غير محدد في الإدخال',
-        why:
-          collected.source === 'url'
-            ? 'لم يظهر اسم الحدث في أي طلب شبكة أو في dataLayer خلال تنفيذ الرحلة كاملة.'
-            : 'لم يظهر اسم الحدث في ملفات الشبكة أو البيانات المرفقة.',
+        when: c.when || t(lang, 'an.when_unknown'),
+        why: t(lang, collected.source === 'url' ? 'an.why_url' : 'an.why_file'),
       });
     }
   }

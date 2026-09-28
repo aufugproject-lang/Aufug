@@ -3,10 +3,12 @@ import Anthropic from '@anthropic-ai/sdk';
 import { config, modelConfigured, CRITERIA, SEVERITIES, CONFIDENCES } from './config.js';
 import { checkAnalytics, deterministicAnalytics } from './analytics.js';
 import { ruleFindings } from './rules.js';
+import { t } from './i18n.js';
+import { executiveSummary } from './summary.js';
 
 const SEVERITY_WEIGHT = { high: 1.5, medium: 0.75, low: 0.25 };
 
-const SYSTEM_PROMPT = `أنت محلل جودة منتجات رقمية وتجربة عميل. تراجع رحلة مستخدم واحدة لتطبيق ويب في بيئة اختبار.
+const systemPrompt = (lang) => `أنت محلل جودة منتجات رقمية وتجربة عميل. تراجع رحلة مستخدم واحدة لتطبيق ويب في بيئة اختبار.
 
 قواعد ملزمة:
 - راجع الدليل المجموع المرفق فقط. لا تعتمد على معرفة عامة عن مواقع أو منتجات مشابهة، ولا تفترض سلوكًا لم يظهر في الدليل.
@@ -20,7 +22,7 @@ const SYSTEM_PROMPT = `أنت محلل جودة منتجات رقمية وتجر
 - قارن الميزات والقصص المتوقعة بما ظهر في الدليل؛ الميزة الغائبة بدليل واضح تُسجل تحت feature_completeness، وغير المؤكدة تذهب إلى insufficient_evidence.
 - أحداث التحليلات: فحص آلي مرفق يبين أي الأحداث ظهرت في الدليل. لا تعدّ حدثًا ظهر في الدليل حدثًا ناقصًا. اكتب في missing_analytics_events فقط الأحداث المتوقعة غير الظاهرة، مع متى يجب أن تُطلق ولماذا تُعد ناقصة بناءً على الدليل.
 - التوصية مقترح عملي قصير يخضع لمراجعة بشرية.
-- اكتب كل النصوص بالعربية، واترك أسماء الأحداث والحقول والأزرار كما وردت في الإدخال أو الدليل حرفيًا.
+- ${t(lang, 'model.language')}
 - success_condition_met: yes إذا أظهر الدليل تحقق شرط النجاح، no إذا أظهر عدم تحققه، unknown إذا لم يكفِ الدليل.
 - journey_state: completed أو stopped أو unknown، و stopped_at_step رقم الخطوة التي توقفت عندها الرحلة أو -1 إذا لم تتوقف أو لم يُعرف.`;
 
@@ -156,12 +158,12 @@ async function callModel(input, collected, analyticsChecks, priorFindings) {
     max_tokens: 32000,
     thinking: { type: 'adaptive' },
     output_config: { effort: 'high', format: { type: 'json_schema', schema: OUTPUT_SCHEMA } },
-    system: SYSTEM_PROMPT,
+    system: systemPrompt(input.lang),
     messages: [{ role: 'user', content }],
   });
   const message = await stream.finalMessage();
-  if (message.stop_reason === 'refusal') throw new Error('رفض النموذج الطلب.');
-  if (message.stop_reason === 'max_tokens') throw new Error('تجاوز رد النموذج الحد الأقصى للطول.');
+  if (message.stop_reason === 'refusal') throw new Error(t(input.lang, 'err.refusal'));
+  if (message.stop_reason === 'max_tokens') throw new Error(t(input.lang, 'err.max_tokens'));
   const text = message.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
   return JSON.parse(text);
 }
@@ -180,14 +182,14 @@ export function validateFindings(raw, collected, input) {
   const seen = new Set();
   for (const f of raw || []) {
     const problems = [];
-    if (!CRITERIA.includes(f.criterion)) problems.push('معيار غير مسموح');
-    if (!SEVERITIES.includes(f.severity)) problems.push('شدة غير صالحة');
-    if (!CONFIDENCES.includes(f.confidence)) problems.push('ثقة غير صالحة');
-    if (!Number.isInteger(f.step) || f.step < 0 || f.step > maxStep) problems.push('رقم خطوة خارج الرحلة');
-    if (!sources.has(f.evidence_source)) problems.push('مصدر دليل غير موجود في الدليل المجموع');
-    if (!String(f.evidence || '').trim()) problems.push('بلا دليل');
+    if (!CRITERIA.includes(f.criterion)) problems.push(t(input.lang, 'rej.criterion'));
+    if (!SEVERITIES.includes(f.severity)) problems.push(t(input.lang, 'rej.severity'));
+    if (!CONFIDENCES.includes(f.confidence)) problems.push(t(input.lang, 'rej.confidence'));
+    if (!Number.isInteger(f.step) || f.step < 0 || f.step > maxStep) problems.push(t(input.lang, 'rej.step'));
+    if (!sources.has(f.evidence_source)) problems.push(t(input.lang, 'rej.source'));
+    if (!String(f.evidence || '').trim()) problems.push(t(input.lang, 'rej.evidence'));
     if (problems.length) {
-      rejected.push(`ملاحظة مستبعدة (${problems.join('، ')}): ${String(f.impact || f.evidence || '').slice(0, 200)}`);
+      rejected.push(t(input.lang, 'ins.rejected', { problems: problems.join(t(input.lang, 'list.sep')), text: String(f.impact || f.evidence || '').slice(0, 200) }));
       continue;
     }
     const key = `${f.criterion}|${f.step}|${norm(f.evidence).slice(0, 120)}`;
@@ -214,13 +216,13 @@ export function validateFindings(raw, collected, input) {
 }
 
 // الدرجة من 5 تُحسب من الملاحظات عالية الثقة وذات الدليل فقط
-export function computeScore(findings) {
+export function computeScore(findings, lang = 'ar') {
   const counted = findings.filter((f) => f.confidence === 'high' && f.evidence);
   const penalty = counted.reduce((sum, f) => sum + SEVERITY_WEIGHT[f.severity], 0);
   return {
     score: Math.round(Math.max(0, 5 - penalty) * 10) / 10,
     counted_findings: counted.length,
-    method: 'تبدأ من 5 وتُخصم 1.5 لكل ملاحظة عالية الشدة و0.75 للمتوسطة و0.25 للمنخفضة، من الملاحظات عالية الثقة ذات الدليل فقط. الحد الأدنى 0.',
+    method: t(lang, 'score.method'),
   };
 }
 
@@ -232,13 +234,13 @@ function uniq(arr) {
 
 export async function analyze(input, collected, { recordedAnalysis = null, onProgress = () => {} } = {}) {
   const analyticsChecks = checkAnalytics(input.expected_events, collected);
-  const det = deterministicAnalytics(analyticsChecks, collected);
-  const warnings = collectWarnings(collected);
+  const det = deterministicAnalytics(analyticsChecks, collected, input.lang);
+  const warnings = collectWarnings(collected, input.lang);
 
   // القواعد الآلية تعمل دائمًا (ما عدا بيانات التجربة المسجلة) ولا تحتاج نموذجًا
   const rules = recordedAnalysis ? { findings: [], insufficient: [] } : ruleFindings(input, collected);
-  const RULES_NOTICE =
-    'التحليل تم بقواعد آلية ثابتة مبنية على الدليل فقط: الخطوات المتعثرة، الروابط المعطوبة، أخطاء الخادم، رسائل الخطأ الظاهرة، وإمكانية الوصول. لتقييم أعمق لتجربة العميل واكتمال الميزات فعّل النموذج بمتغير ANTHROPIC_API_KEY.';
+  const L = input.lang;
+  const RULES_NOTICE = t(L, 'notice.rules');
 
   let mode = 'rules';
   let notice = RULES_NOTICE;
@@ -247,15 +249,15 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
   if (recordedAnalysis) {
     mode = 'recorded_demo';
     modelOut = recordedAnalysis;
-    notice = 'هذه بيانات تجربة جاهزة: الحكم معروض من تحليل مسجل مسبقًا لملفات التجربة، وقد مر بنفس قواعد التحقق من الدليل. لتحليل حي اضبط مفتاح النموذج.';
+    notice = t(L, 'notice.demo');
   } else if (modelConfigured()) {
-    onProgress('تحليل الدليل بنموذج الذكاء الاصطناعي');
+    onProgress(t(L, 'progress.model'));
     try {
       modelOut = await callModel(input, collected, analyticsChecks, rules.findings);
       mode = 'model';
       notice = null;
     } catch (e) {
-      notice = `تعذر استدعاء النموذج (${String(e.message || e).split('\n')[0]}). ${RULES_NOTICE}`;
+      notice = t(L, 'notice.model_failed', { msg: String(e.message || e).split('\n')[0] }) + RULES_NOTICE;
     }
   }
 
@@ -271,8 +273,8 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
   const hasCondition = Boolean(input.success_condition);
   const auto = Boolean(collected.auto_explored);
   const noConditionNote = auto
-    ? 'استُكشف الموقع تلقائيًا بدون شرط نجاح، فلا يمكن الحكم على اكتمال رحلة محددة. اكتب خطوات الرحلة وشرط النجاح للحكم عليها.'
-    : 'لم يُحدد شرط نجاح، فلا يمكن الحكم على اكتمال الرحلة؛ عُرض ما نُفذ من خطوات.';
+    ? t(L, 'ins.no_condition_auto')
+    : t(L, 'ins.no_condition');
   const validStep = (s) => Number.isInteger(s) && s >= 0 && s <= input.steps.length;
 
   if (collected.source === 'url') {
@@ -302,9 +304,9 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
           stoppedAt = validStep(modelOut.stopped_at_step) ? modelOut.stopped_at_step : auto ? null : input.steps.length;
         } else if (auto) {
           completed = null;
-          insufficient.push('الاستكشاف التلقائي لم يُظهر دليلًا كافيًا على تحقق شرط النجاح.');
+          insufficient.push(t(L, 'ins.auto_unknown'));
         } else {
-          insufficient.push('نُفذت كل الخطوات، لكن الدليل لا يكفي لتأكيد تحقق شرط النجاح.');
+          insufficient.push(t(L, 'ins.steps_unknown'));
         }
       }
     } else if (modelOut.journey_state === 'completed' && modelOut.success_condition_met !== 'no') {
@@ -313,7 +315,7 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
       completed = false;
       stoppedAt = validStep(modelOut.stopped_at_step) ? modelOut.stopped_at_step : null;
     } else {
-      insufficient.push('الملفات المرفقة لا تكفي للحكم على اكتمال الرحلة.');
+      insufficient.push(t(L, 'ins.files_unknown'));
     }
 
     // النموذج يحسّن وصف الأحداث الناقصة، لكن لا يضيف حدثًا ظهر في الدليل ولا حدثًا غير متوقع
@@ -326,20 +328,20 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
   } else {
     if (collected.source === 'url' && collected.all_steps_executed) {
       if (!hasCondition) insufficient.push(noConditionNote);
-      else if (auto) insufficient.push('التحقق من شرط النجاح بعد الاستكشاف التلقائي يحتاج حكم النموذج.');
-      else insufficient.push('نُفذت كل الخطوات آليًا؛ التحقق من شرط النجاح يحتاج حكم النموذج.');
+      else if (auto) insufficient.push(t(L, 'ins.auto_condition_model'));
+      else insufficient.push(t(L, 'ins.steps_condition_model'));
     }
-    if (collected.source === 'file') insufficient.push('الحكم على اكتمال الرحلة من الملفات يحتاج حكم النموذج.');
+    if (collected.source === 'file') insufficient.push(t(L, 'ins.files_model'));
     for (const f of collected.files || [])
-      if (f.kind === 'image') insufficient.push(`الصورة «${f.file}» لا تُقرأ إلا بالنموذج؛ لم تُحلل.`);
+      if (f.kind === 'image') insufficient.push(t(L, 'ins.image_model', { file: f.file }));
   }
 
   const order = { high: 0, medium: 1, low: 2 };
   findings.sort((a, b) => order[a.severity] - order[b.severity] || a.step - b.step);
-  scoring = computeScore(findings);
+  scoring = computeScore(findings, L);
   score = scoring.score;
 
-  return {
+  const result = {
     product_name: input.product_name,
     journey: input.journey,
     source: collected.source,
@@ -351,6 +353,7 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
     insufficient_evidence: uniq(insufficient),
     meta: {
       created_at: new Date().toISOString(),
+      lang: L,
       analysis_mode: mode,
       model: mode === 'model' ? config.model : null,
       notice,
@@ -366,16 +369,18 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
     },
     collected_evidence: publicEvidence(collected),
   };
+  result.meta.executive_summary = executiveSummary(result, L);
+  return result;
 }
 
-function collectWarnings(collected) {
+function collectWarnings(collected, lang) {
   const w = [];
   if (collected.source === 'file') {
     for (const f of collected.files) {
       if (f.content && f.content.truncated)
-        w.push(`الملف «${f.file}» طويل؛ أُرسل أول ${f.content.text.length} حرف من ${f.content.total_chars} إلى التحليل.`);
-      if (f.har && f.har.truncated) w.push(`الملف «${f.file}» يحتوي ${f.har.total_entries} طلبًا؛ حُلل أول 400 منها.`);
-      if (f.too_large_for_model) w.push(`الصورة «${f.file}» أكبر من 5MB ولم تُرسل للتحليل.`);
+        w.push(t(lang, 'warn.truncated', { file: f.file, sent: f.content.text.length, total: f.content.total_chars }));
+      if (f.har && f.har.truncated) w.push(t(lang, 'warn.har_truncated', { file: f.file, total: f.har.total_entries }));
+      if (f.too_large_for_model) w.push(t(lang, 'warn.image_large', { file: f.file }));
       if (f.kind === 'unreadable') w.push(f.error + ` (${f.file})`);
     }
   }

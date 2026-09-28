@@ -1,0 +1,67 @@
+{
+  "_note": "Pre-recorded analysis of the demo files in demo/files, in the same format as model output. Used only for the demo when no model key is set, and validated by the same evidence rules.",
+  "success_condition_met": "no",
+  "success_condition_basis": "Both POST /api/orders requests in network.har returned 500 with PAYMENT_GATEWAY_TIMEOUT, and the session notes say no order number appeared.",
+  "journey_state": "stopped",
+  "stopped_at_step": 5,
+  "findings": [
+    {
+      "criterion": "friction", "severity": "high", "step": 5, "evidence_source": "file:network.har",
+      "evidence": "Two POST requests to /api/orders returned status 500 with {\"error\":\"PAYMENT_GATEWAY_TIMEOUT\"}, and no confirmation page request follows them.",
+      "impact": "The customer cannot place the order, so the journey stops at order confirmation and the sale is lost.",
+      "recommendation": "Fix the payment gateway timeout in the test environment, and show a clear state on payment failure with an alternative payment option.",
+      "confidence": "high"
+    },
+    {
+      "criterion": "CX", "severity": "high", "step": 5, "evidence_source": "file:session-notes.md",
+      "evidence": "Tester note: “بعد إعادة تحميل الصفحة للمحاولة مجددًا، كانت حقول عنوان الشحن فارغة” (after reloading to retry, the shipping address fields were empty).",
+      "impact": "Customer data is lost after the error, raising the chance of abandoning the order.",
+      "recommendation": "Keep the address in the session and restore it automatically after a failed order confirmation.",
+      "confidence": "medium"
+    },
+    {
+      "criterion": "UX", "severity": "medium", "step": 5, "evidence_source": "file:checkout.html",
+      "evidence": "The only visible error message is “حدث خطأ، حاول مرة أخرى” (an error occurred, try again), with no reason or next step.",
+      "impact": "The customer does not know whether they were charged or what to do, and retries with difficulty.",
+      "recommendation": "Replace the generic message with one stating the payment did not go through and nothing was charged, with buttons to retry or change the payment method.",
+      "confidence": "high"
+    },
+    {
+      "criterion": "accessibility", "severity": "medium", "step": 4, "evidence_source": "file:checkout.html",
+      "evidence": "The phone and postal_code fields in the shipping form have no label or aria-label and rely on placeholder only. The icon-close button has no text name.",
+      "impact": "Screen-reader users cannot tell what the two fields are for and fill the address with difficulty.",
+      "recommendation": "Add labels linked to phone and postal_code, and an aria-label to the close button.",
+      "confidence": "high"
+    },
+    {
+      "criterion": "feature_completeness", "severity": "medium", "step": 4, "evidence_source": "file:checkout.html",
+      "evidence": "The order summary shows “رسوم الشحن: تُحسب عند الدفع” (shipping: calculated at payment) and “45 ر.س + الشحن”, while the expected feature is showing shipping cost before payment.",
+      "impact": "The customer does not see the final total before paying, which weakens trust and adds hesitation.",
+      "recommendation": "Calculate shipping once the city is chosen and show the final total before the confirm button.",
+      "confidence": "high"
+    },
+    {
+      "criterion": "feature_completeness", "severity": "low", "step": 5, "evidence_source": "file:checkout.html",
+      "evidence": "The checkout page has no field, button or text for a discount code.",
+      "impact": "Customers with a discount code cannot use it, but can still buy at full price.",
+      "recommendation": "Add a discount code field to the order summary before payment.",
+      "confidence": "high"
+    },
+    {
+      "criterion": "navigation", "severity": "low", "step": 3, "evidence_source": "file:session-notes.md",
+      "evidence": "Tester note: the “المتابعة بدون حساب” (continue without an account) option is a small text link below the sign-in form; it took about 20 seconds to find.",
+      "impact": "A delay in reaching guest checkout, without blocking the task.",
+      "recommendation": "Show “continue without an account” as a primary button next to sign-in.",
+      "confidence": "medium"
+    }
+  ],
+  "missing_analytics_events": [
+    { "event_name": "add_shipping_info", "when": "When the shipping address is saved in step 4", "why": "POST /api/checkout/address succeeded with 200 in network.har, but no request to analytics.nakheel.test/collect carrying add_shipping_info followed." },
+    { "event_name": "add_payment_info", "when": "When a payment method is chosen in step 5", "why": "Neither network.har nor the dataLayer in checkout.html sends this event, even though a payment method was chosen." },
+    { "event_name": "purchase", "when": "When the order confirmation page appears", "why": "The confirmation page never appeared because /api/orders failed, so the event was not sent. Re-check after the payment fix." }
+  ],
+  "insufficient_evidence": [
+    "The order confirmation page (step 6) was not attached, so its content and the order number cannot be judged.",
+    "The console error “Cannot read properties of undefined (reading 'shippingZone')” and the 400 on /api/shipping/rates?city= point to a shipping calculation defect, but the evidence does not show its exact visible effect on the customer."
+  ]
+}

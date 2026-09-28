@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import * as cheerio from 'cheerio';
+import { t } from '../i18n.js';
 
 const MAX_TEXT = 15000;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -100,7 +101,7 @@ async function imageDims(buf, ext) {
 }
 
 // files: [{ path, originalname }]
-export async function collectFromFiles(files) {
+export async function collectFromFiles(files, lang = 'ar') {
   const evidence = [];
   for (const f of files) {
     const name = f.originalname;
@@ -123,7 +124,7 @@ export async function collectFromFiles(files) {
         try {
           parsed = JSON.parse(raw);
         } catch {
-          item.parse_error = 'تعذر قراءة JSON؛ عومل كنص.';
+          item.parse_error = t(lang, 'file.json_error');
         }
         if (parsed && parsed.log && Array.isArray(parsed.log.entries)) {
           item.kind = 'network';
@@ -141,7 +142,7 @@ export async function collectFromFiles(files) {
       }
     } catch (e) {
       item.kind = 'unreadable';
-      item.error = `تعذرت قراءة الملف: ${String(e.message || e).split('\n')[0]}`;
+      item.error = t(lang, 'file.unreadable', { msg: String(e.message || e).split('\n')[0] });
     }
     evidence.push(item);
   }

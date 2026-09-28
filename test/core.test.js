@@ -82,7 +82,7 @@ test('القواعد الآلية تُنتج ملاحظات مرتبطة بال�
     target_url: 'https://s.test/',
     steps: [
       { number: 0, status: 'done', page, network: [{ method: 'POST', url: 'https://s.test/api/orders', status: 500 }], console_errors: [] },
-      { number: 1, auto: true, text: 'افتح «الأسعار» (/pricing)', status: 'failed', error: 'الصفحة /pricing أعادت الحالة 404.', page, network: [], console_errors: [] },
+      { number: 1, auto: true, kind: 'link', link: { text: 'الأسعار', path: '/pricing' }, http_status: 404, text: 'افتح «الأسعار» (/pricing)', status: 'failed', error: 'الصفحة /pricing أعادت الحالة 404.', page, network: [], console_errors: [] },
     ],
   };
   const { findings } = ruleFindings(input, collected);
@@ -90,4 +90,13 @@ test('القواعد الآلية تُنتج ملاحظات مرتبطة بال�
   assert.deepEqual(rules, ['broken_link', 'server_error', 'unlabeled_fields']);
   assert.ok(findings.every((f) => f.evidence && f.evidence_source.startsWith('step:') && f.origin === 'rule'));
   assert.equal(findings.find((f) => f.rule === 'server_error').severity, 'high');
+});
+
+test('القواعد تكتب بلغة التحليل', async () => {
+  const { ruleFindings } = await import('../server/rules.js');
+  const page = { url: 'https://s.test/', lang: '', error_messages: [], accessibility: { unlabeled_fields: [], images_without_alt: 2, unnamed_buttons: 0 } };
+  const collected = { source: 'url', target_url: 'https://s.test/', steps: [{ number: 0, status: 'done', page, network: [], console_errors: [] }] };
+  const { findings } = ruleFindings({ lang: 'en', journey: 'J', steps: [], expected_features: [] }, collected);
+  assert.equal(findings.find((f) => f.rule === 'images_without_alt').evidence, '2 image(s) without an alt attribute.');
+  assert.ok(findings.some((f) => f.rule === 'missing_lang'));
 });

@@ -1,7 +1,7 @@
 /* أنماط تقرير PDF المطبوع فقط — مستقلة تمامًا عن أنماط واجهة التطبيق. */
 @page {
   size: A4;
-  margin: 26mm 16mm 22mm 16mm;
+  margin: 24mm 16mm 20mm 16mm;
 }
 
 * { box-sizing: border-box; }
@@ -9,95 +9,138 @@
 html, body {
   margin: 0;
   padding: 0;
-  font-family: 'Report Naskh', 'Noto Naskh Arabic', 'Noto Sans Arabic', 'Arial', sans-serif;
-  font-size: 10.5pt;
-  line-height: 1.65;
-  color: #1a1a1a;
-  direction: rtl;
+  font-family: 'Report Sans', 'IBM Plex Sans Arabic', 'Noto Sans Arabic', Arial, sans-serif;
+  font-size: 10pt;
+  line-height: 1.7;
+  color: #1d2b27;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
+body.rtl { direction: rtl; }
+body.ltr { direction: ltr; }
 
 h1, h2, h3 { font-weight: 700; margin: 0; }
 h2 {
-  font-size: 15pt;
+  font-size: 14.5pt;
   margin: 0 0 4mm;
   padding-bottom: 2mm;
-  border-bottom: 0.6pt solid #1a1a1a;
+  border-bottom: 1.2pt solid #1f4d43;
+  color: #1f4d43;
   break-after: avoid;
 }
-h3 { font-size: 11.5pt; margin: 5mm 0 2mm; break-after: avoid; }
+h3 { font-size: 11pt; margin: 5mm 0 2mm; break-after: avoid; }
 p { margin: 0 0 3mm; }
+.lead { font-size: 10.5pt; }
 
-.ltr { direction: ltr; unicode-bidi: embed; font-family: 'DejaVu Sans Mono', monospace; font-size: 9pt; }
+.ltr { direction: ltr; unicode-bidi: isolate; }
+.code, .code-tag { font-family: 'DejaVu Sans Mono', monospace; }
 
 /* الغلاف */
 .cover {
-  height: 240mm;
+  height: 244mm;
   display: flex;
   flex-direction: column;
   justify-content: center;
   break-after: page;
+  padding: 0 6mm;
+  border-inline-start: 3pt solid #1f4d43;
 }
-.cover .kicker { font-size: 11pt; color: #555; margin-bottom: 6mm; }
-.cover h1 { font-size: 26pt; line-height: 1.3; margin-bottom: 4mm; }
-.cover .journey { font-size: 15pt; margin-bottom: 14mm; }
+.cover .logo { width: 18mm; height: 18mm; margin-bottom: 8mm; }
+.cover .kicker { font-size: 10.5pt; color: #7a766f; margin-bottom: 4mm; }
+.cover h1 { font-size: 28pt; line-height: 1.3; margin-bottom: 3mm; }
+.cover .journey { font-size: 14pt; margin-bottom: 12mm; color: #3d4a46; }
+.cover-score { display: flex; align-items: center; gap: 6mm; margin-bottom: 12mm; }
+.cover-score .ring { width: 30mm; height: 30mm; }
+.cover-score .big { font-size: 22pt; font-weight: 700; }
 .cover table.meta { width: 100%; border-collapse: collapse; }
 .cover table.meta th, .cover table.meta td {
-  text-align: right;
+  text-align: start;
   padding: 3mm 0;
-  border-top: 0.5pt solid #bbb;
-  font-size: 11.5pt;
+  border-top: 0.5pt solid #d9d2c7;
+  font-size: 11pt;
 }
-.cover table.meta th { width: 45mm; color: #555; font-weight: 400; }
-.cover .score { font-size: 20pt; font-weight: 700; }
-.cover .note { margin-top: 10mm; font-size: 9.5pt; color: #555; }
+.cover table.meta th { width: 45mm; color: #7a766f; font-weight: 400; }
+.cover .note { margin-top: 10mm; font-size: 9pt; color: #7a766f; background: #f6f1ea; padding: 3mm 4mm; border-radius: 2mm; }
 
 section { margin-bottom: 9mm; }
 section.new-page { break-before: page; }
+section.keep { break-inside: avoid; }
+
+.two-col { display: flex; gap: 5mm; margin: 2mm 0 5mm; }
+.two-col .box { flex: 1; border: 0.6pt solid #e2dbcf; border-radius: 2.5mm; padding: 3mm 4mm; break-inside: avoid; }
+.two-col h3 { margin-top: 0; font-size: 10.5pt; }
+.sev-row { display: flex; align-items: center; gap: 4mm; }
+.sev-row .ring { width: 26mm; height: 26mm; flex: none; }
+table.bars { width: 100%; border-collapse: collapse; font-size: 9pt; }
+table.bars td { padding: 1.2mm 0; vertical-align: middle; }
+table.bars td:first-child { white-space: nowrap; padding-inline-end: 3mm; }
+table.bars .bar-cell { width: 100%; }
+table.bars .num { width: 8mm; text-align: end; font-weight: 700; }
+.bar { height: 2.2mm; background: #efe9df; border-radius: 2mm; overflow: hidden; }
+.bar span { display: block; height: 100%; border-radius: 2mm; }
+.fill-high { background: #b3413a; }
+.fill-medium { background: #c07a2c; }
+.fill-low { background: #2f7a55; }
 
 /* جداول بعرض الصفحة */
 table.data {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  font-size: 9.5pt;
+  font-size: 9pt;
 }
 table.data thead { display: table-header-group; }
 table.data th {
-  background: #efefef;
-  text-align: right;
+  background: #f3eee6;
+  text-align: start;
   font-weight: 700;
-  padding: 2mm 2mm;
-  border-bottom: 0.8pt solid #1a1a1a;
+  padding: 2.2mm 2mm;
+  border-bottom: 0.8pt solid #1d2b27;
 }
 table.data td {
   vertical-align: top;
-  padding: 2mm 2mm;
-  border-bottom: 0.4pt solid #c8c8c8;
+  padding: 2.4mm 2mm;
+  border-bottom: 0.4pt solid #ddd6ca;
   overflow-wrap: anywhere;
 }
 table.data tr { break-inside: avoid; page-break-inside: avoid; }
+table.findings tr td:first-child { border-inline-start: 2pt solid transparent; }
+table.findings tr.row-high td:first-child { border-inline-start-color: #b3413a; }
+table.findings tr.row-medium td:first-child { border-inline-start-color: #c07a2c; }
+table.findings tr.row-low td:first-child { border-inline-start-color: #2f7a55; }
 
-table.kv { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
-table.kv th, table.kv td { text-align: right; padding: 2mm 0; border-bottom: 0.4pt solid #c8c8c8; vertical-align: top; }
+table.kv { width: 100%; border-collapse: collapse; font-size: 10pt; }
+table.kv th, table.kv td { text-align: start; padding: 2mm 0; border-bottom: 0.4pt solid #ddd6ca; vertical-align: top; }
 table.kv th { width: 55mm; font-weight: 700; }
 
-/* ألوان الشدة فقط */
+/* ألوان الشدة */
 .sev { font-weight: 700; white-space: nowrap; }
-.sev-high { color: #b3261e; }
-.sev-medium { color: #a15c00; }
-.sev-low { color: #2f5d8a; }
+.sev-high { color: #b3413a; }
+.sev-medium { color: #a8661f; }
+.sev-low { color: #2f7a55; }
 
-ol.recs { margin: 0; padding-right: 6mm; }
+ol.recs { margin: 0; padding-inline-start: 6mm; }
 ol.recs li { margin-bottom: 2mm; break-inside: avoid; }
 
-ul.plain { margin: 0; padding-right: 6mm; }
+ul.plain { margin: 0; padding-inline-start: 6mm; }
 ul.plain li { margin-bottom: 1.5mm; break-inside: avoid; }
 
-.muted { color: #555; }
-.small { font-size: 9pt; }
-.review-note { font-size: 9pt; color: #555; margin-top: 2mm; }
+/* خطة العمل */
+.plan { border-inline-start: 1pt solid #d9d2c7; padding-inline-start: 5mm; margin-inline-start: 2mm; }
+.plan-group { margin-bottom: 4mm; break-inside: avoid; }
+.plan-head { display: flex; align-items: center; gap: 2mm; margin-bottom: 1mm; }
+.plan-dot { width: 3mm; height: 3mm; border-radius: 50%; display: inline-block; margin-inline-start: -6.6mm; }
+.plan-dot.p1 { background: #b3413a; }
+.plan-dot.p2 { background: #c07a2c; }
+.plan-dot.p3 { background: #2f7a55; }
+.plan ul { margin: 0; padding-inline-start: 5mm; }
+.plan li { margin-bottom: 1mm; }
 
+.method-box { background: #f6f1ea; border-radius: 2.5mm; padding: 4mm 5mm; }
+.method-box p:last-child { margin-bottom: 0; }
+
+.muted { color: #6f6b64; }
+.small { font-size: 8.5pt; }
+.review-note { font-size: 8.5pt; color: #6f6b64; margin-top: 2mm; }
 .nowrap { white-space: nowrap; }
-.code-tag { direction: ltr; text-align: right; font-family: 'DejaVu Sans Mono', monospace; font-size: 7pt; color: #555; overflow-wrap: anywhere; }
+.code-tag { direction: ltr; text-align: start; font-size: 7pt; color: #6f6b64; overflow-wrap: anywhere; }

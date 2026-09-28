@@ -1,3 +1,5 @@
+import { t, normLang } from './i18n.js';
+
 // تحويل حقول النموذج النصية إلى بنية مرتبة يستخدمها الجامع والمحلل.
 
 function lines(text) {
@@ -38,6 +40,7 @@ export function normalizeInput(body) {
   const source = body.source === 'url' ? 'url' : 'file';
   const input = {
     source,
+    lang: normLang(body.lang),
     product_name: String(body.product_name || '').trim(),
     journey: String(body.journey || '').trim(),
     steps: parseSteps(body.steps),
@@ -61,15 +64,15 @@ export function validateInput(input, fileCount) {
       const u = new URL(input.url);
       if (!/^https?:$/.test(u.protocol)) throw new Error();
     } catch {
-      errors.push('رابط الموقع غير صالح. استخدم رابطًا يبدأ بـ http أو https.');
+      errors.push(t(input.lang, 'input.bad_url'));
     }
     return errors;
   }
-  if (!input.product_name) errors.push('اسم المنتج مطلوب.');
-  if (!input.journey) errors.push('اسم الرحلة مطلوب.');
-  if (!input.steps.length) errors.push('اكتب خطوة واحدة على الأقل للرحلة.');
-  if (!input.success_condition) errors.push('شرط النجاح مطلوب.');
-  if (!fileCount) errors.push('أرفق ملف دليل واحدًا على الأقل.');
+  if (!input.product_name) errors.push(t(input.lang, 'input.product_required'));
+  if (!input.journey) errors.push(t(input.lang, 'input.journey_required'));
+  if (!input.steps.length) errors.push(t(input.lang, 'input.steps_required'));
+  if (!input.success_condition) errors.push(t(input.lang, 'input.condition_required'));
+  if (!fileCount) errors.push(t(input.lang, 'input.files_required'));
   return errors;
 }
 
@@ -83,9 +86,9 @@ export function completeUrlInput(input, collected) {
     input.product_name = collected.discovered_title || host;
   }
   if (collected.auto_explored) {
-    if (!input.journey) input.journey = 'استكشاف تلقائي للموقع';
+    if (!input.journey) input.journey = t(input.lang, 'journey.auto');
     input.steps = collected.steps.filter((s) => s.number > 0).map((s) => ({ number: s.number, text: s.text }));
   }
-  if (!input.journey) input.journey = 'رحلة بدون اسم';
+  if (!input.journey) input.journey = t(input.lang, 'journey.unnamed');
   return input;
 }

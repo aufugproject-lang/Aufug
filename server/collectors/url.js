@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import { config } from '../config.js';
 import { parseAction, runAction } from './actions.js';
+import { t } from '../i18n.js';
 
 const SKIP_TYPES = new Set(['image', 'font', 'stylesheet', 'media']);
 const MAX_TEXT = 4000;
@@ -120,6 +121,7 @@ function navCandidatesInPage() {
 const LOGIN_TEXT = /(تسجيل\s*الدخول|دخول|login|log\s*in|sign\s*in)/i;
 
 export async function collectFromUrl(input, onProgress = () => {}) {
+  const lang = input.lang;
   const browser = await chromium.launch({ headless: config.headless, executablePath: config.chromiumPath });
   let current = 0; // رقم الخطوة الجاري جمع أحداثها (0 = التحميل الأول)
   const network = new Map();
@@ -196,6 +198,7 @@ export async function collectFromUrl(input, onProgress = () => {}) {
 
   const steps = [];
   let stoppedAt = null;
+  let thumbnail = null;
   const timeout = config.stepTimeoutMs;
 
   const settle = async () => {
@@ -211,19 +214,21 @@ export async function collectFromUrl(input, onProgress = () => {}) {
   };
 
   try {
-    onProgress('فتح الموقع');
+    onProgress(t(lang, 'progress.open'));
     let initialError = null;
     try {
       await page.goto(input.url, { waitUntil: 'domcontentloaded', timeout: timeout * 3 });
       await settle();
+      // صورة مصغرة للواجهة فقط (رأس صفحة النتائج)، لا تدخل في التقرير
+      thumbnail = await page.screenshot({ type: 'jpeg', quality: 60 }).catch(() => null);
     } catch (e) {
       initialError = String(e.message || e).split('\n')[0];
     }
     steps.push({
       number: 0,
-      text: `فتح الرابط ${input.url}`,
+      text: t(lang, 'step.open_url', { url: input.url }),
       status: initialError ? 'failed' : 'done',
-      action_result: initialError ? null : 'تم تحميل الصفحة',
+      action_result: initialError ? null : t(lang, 'step.loaded'),
       error: initialError,
       page: await snapshot(),
     });
@@ -238,19 +243,21 @@ export async function collectFromUrl(input, onProgress = () => {}) {
         continue;
       }
       current = step.number;
-      onProgress(`تنفيذ الخطوة ${step.number} من ${input.steps.length}`);
+      onProgress(t(lang, 'progress.step', { n: step.number, total: input.steps.length }));
       const action = parseAction(step.text);
       const record = { number: step.number, text: step.text, action: action ? action.type : null };
       if (!action) {
         record.status = 'failed';
-        record.error = 'صيغة الخطوة غير مدعومة في وضع الأتمتة، فلم تُنفذ. راجع الصيغ المدعومة في صفحة الإدخال.';
+        record.error = t(lang, 'step.unsupported');
+        record.error_code = 'unsupported';
       } else {
         try {
-          record.action_result = await runAction(page, action, input.account, page.url() || input.url, timeout);
+          record.action_result = await runAction(page, action, input.account, page.url() || input.url, timeout, lang);
           record.status = 'done';
         } catch (e) {
           record.status = 'failed';
           record.error = String(e.message || e).split('\n')[0];
+          if (e.code) record.error_code = e.code;
         }
       }
       await settle();
@@ -266,17 +273,19 @@ export async function collectFromUrl(input, onProgress = () => {}) {
   // ثم فتح أهم روابط التنقل. لا يضغط أزرارًا تغيّر البيانات ولا يرسل نماذج غير نموذج الدخول.
   async function autoExplore() {
     let n = 0;
-    const record = async (text, fn) => {
+    const record = async (text, fn, meta = {}) => {
       n += 1;
       current = n;
-      onProgress(`استكشاف تلقائي: الخطوة ${n}`);
-      const rec = { number: n, text, auto: true };
+      onProgress(t(lang, 'progress.auto', { n }));
+      const rec = { number: n, text, auto: true, ...meta };
       try {
         rec.action_result = await fn();
         rec.status = 'done';
       } catch (e) {
         rec.status = 'failed';
         rec.error = String(e.message || e).split('\n')[0];
+        if (e.code) rec.error_code = e.code;
+        if (e.http_status) rec.http_status = e.http_status;
       }
       await settle();
       rec.page = await snapshot();
@@ -291,33 +300,33 @@ export async function collectFromUrl(input, onProgress = () => {}) {
       if (!(await passwordVisible())) {
         const link = page.getByRole('link', { name: LOGIN_TEXT }).or(page.getByRole('button', { name: LOGIN_TEXT })).first();
         if (await link.isVisible().catch(() => false)) {
-          await record('فتح صفحة تسجيل الدخول', async () => {
+          await record(t(lang, 'auto.open_login'), async () => {
             await link.click({ timeout });
-            return 'ضغط رابط تسجيل الدخول';
-          });
+            return t(lang, 'auto.clicked_login');
+          }, { kind: 'login' });
         }
       }
       if (await passwordVisible()) {
-        await record('تسجيل الدخول بالحساب التجريبي', async () => {
+        await record(t(lang, 'auto.login'), async () => {
           const pwd = page.locator('input[type=password]:visible').first();
           const form = pwd.locator('xpath=ancestor::form[1]');
           const scope = (await form.count()) ? form : page;
           const user = scope
             .locator('input[type=email]:visible, input[type=text]:visible, input[type=tel]:visible, input:not([type]):visible')
             .first();
-          if (!(await user.count())) throw new Error('لم يُعثر على حقل اسم المستخدم بجانب حقل كلمة المرور.');
+          if (!(await user.count())) throw Object.assign(new Error(t(lang, 'auto.no_user_field')), { code: 'not_found' });
           await user.fill(input.account.username, { timeout });
           await pwd.fill(input.account.password, { timeout });
           const before = page.url();
           await pwd.press('Enter');
           await page.waitForURL((u) => u.toString() !== before, { timeout: 8000 }).catch(() => {});
           await page.waitForLoadState('domcontentloaded', { timeout }).catch(() => {});
-          return `إرسال نموذج الدخول (${before === page.url() ? 'بقي على الصفحة نفسها' : 'انتقل إلى ' + page.url()})`;
-        });
+          return before === page.url() ? t(lang, 'auto.login_same') : t(lang, 'auto.login_moved', { url: page.url() });
+        }, { kind: 'login' });
       } else {
-        await record('البحث عن نموذج تسجيل الدخول', async () => {
-          throw new Error('أُدخل حساب تجريبي لكن لم يُعثر على نموذج تسجيل دخول ظاهر.');
-        });
+        await record(t(lang, 'auto.find_login'), async () => {
+          throw Object.assign(new Error(t(lang, 'auto.no_login_form')), { code: 'not_found' });
+        }, { kind: 'login' });
       }
     }
 
@@ -329,12 +338,12 @@ export async function collectFromUrl(input, onProgress = () => {}) {
       .filter((l) => !visited.has(l.href.split('#')[0]) && !LOGIN_TEXT.test(l.text) && !seen.has(l.key) && seen.add(l.key))
       .slice(0, config.autoMaxPages);
     for (const c of candidates) {
-      await record(`افتح «${c.text || c.key}» (${c.key || '/'})`, async () => {
+      await record(t(lang, 'auto.open_link', { text: c.text || c.key, path: c.key || '/' }), async () => {
         const res = await page.goto(c.href, { waitUntil: 'domcontentloaded', timeout: timeout * 2 });
         const status = res ? res.status() : null;
-        if (status && status >= 400) throw new Error(`الصفحة ${c.key} أعادت الحالة ${status}.`);
-        return `فتح ${c.href}${status ? ` (الحالة ${status})` : ''}`;
-      });
+        if (status && status >= 400) throw Object.assign(new Error(t(lang, 'auto.http_error', { path: c.key, status })), { http_status: status });
+        return t(lang, 'auto.opened', { url: c.href, status });
+      }, { kind: 'link', link: { text: c.text || c.key, path: c.key || '/' } });
     }
   }
 
@@ -350,6 +359,7 @@ export async function collectFromUrl(input, onProgress = () => {}) {
     source: 'url',
     target_url: input.url,
     auto_explored: auto,
+    thumbnail,
     discovered_title: (first && first.title) || '',
     steps,
     // في الاستكشاف التلقائي الرابط المعطوب دليل وليس توقفًا للرحلة؛ يتوقف فقط إن فشل فتح الموقع

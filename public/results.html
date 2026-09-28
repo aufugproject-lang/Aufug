@@ -3,16 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>نتائج المراجعة</title>
+<title>Quality Review</title>
+<script>
+  try {
+    var l = localStorage.getItem('qr.lang') === 'en' ? 'en' : 'ar';
+    document.documentElement.lang = l;
+    document.documentElement.dir = l === 'ar' ? 'rtl' : 'ltr';
+    var th = localStorage.getItem('qr.theme');
+    if (th) document.documentElement.dataset.theme = th;
+  } catch (e) {}
+</script>
 <link rel="stylesheet" href="/css/app.css">
 </head>
-<body>
-<header class="topbar">
-  <a href="/" class="brand"><span class="logo" aria-hidden="true">◆</span> مراجعة جودة المنتج</a>
-  <a href="/" class="button ghost small-btn">+ مراجعة جديدة</a>
-</header>
+<body class="results">
+<header class="topbar"></header>
 
-<main class="page wide" id="app">
+<main class="container wide" id="app">
   <div class="skeleton" aria-busy="true">
     <div class="sk sk-title"></div>
     <div class="sk-row"><div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>
@@ -20,6 +26,7 @@
   </div>
 </main>
 
+<script src="/js/shell.js"></script>
 <script src="/js/results.js"></script>
 </body>
 </html>

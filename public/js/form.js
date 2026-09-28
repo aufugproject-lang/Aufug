@@ -1,74 +1,73 @@
 (() => {
+  const { t } = window.QR;
   const form = document.getElementById('analyze-form');
   const errorsBox = document.getElementById('form-errors');
   const fileInput = document.getElementById('files');
   const fileList = document.getElementById('file-list');
   const dropzone = document.getElementById('dropzone');
   const journeyBox = document.getElementById('journey-box');
+  let mode = 'url';
   let demoMode = false;
   let demoFiles = [];
   let selectedFiles = [];
+  let lastProgress = '';
 
-  fetch('/api/status')
-    .then((r) => r.json())
-    .then((s) => {
-      const el = document.getElementById('model-status');
-      el.querySelector('.txt').textContent = s.model_configured ? `النموذج مفعّل · ${s.model}` : 'النموذج غير مُعد — عرض الدليل فقط';
-      el.classList.add(s.model_configured ? 'ok' : 'warn');
-    })
-    .catch(() => {});
-
-  const currentMode = () => form.querySelector('input[name=source]:checked').value;
-
-  function applyMode() {
-    const mode = currentMode();
-    document.querySelectorAll('[data-mode]').forEach((el) => {
-      el.hidden = el.dataset.mode !== mode;
-    });
+  function renderStatic() {
     const isFile = mode === 'file';
-    document.getElementById('journey-title').textContent = isFile ? 'بيانات الرحلة' : 'تخصيص الرحلة';
+    document.getElementById('journey-title').textContent = t(isFile ? 'opts.file' : 'opts.url');
     const badge = document.getElementById('journey-badge');
-    badge.textContent = isFile ? 'مطلوبة' : 'اختياري';
+    badge.textContent = t(isFile ? 'opts.required' : 'opts.optional');
     badge.classList.toggle('req', isFile);
-    journeyBox.classList.toggle('locked', isFile);
-    if (isFile) journeyBox.open = true;
-    const pn = form.elements.product_name;
-    pn.placeholder = isFile ? pn.dataset.filePlaceholder : 'يؤخذ من عنوان الموقع إن تُرك فارغًا';
+    document.getElementById('product_name').placeholder = t(isFile ? 'f.product_ph_file' : 'f.product_ph_url');
+    const table = document.getElementById('syntax-table');
+    table.innerHTML = '';
+    for (const [code, desc] of t('syntax.rows')) {
+      const tr = table.insertRow();
+      const a = tr.insertCell();
+      a.textContent = code;
+      a.dir = 'auto';
+      tr.insertCell().textContent = desc;
+    }
+    document.getElementById('demo-link').href = `/results.html?id=${window.QR.lang === 'en' ? 'demo-en' : 'demo'}`;
+    document.getElementById('progress').textContent = lastProgress || t('wait.queued');
+    renderFiles();
   }
+
+  function setMode(next) {
+    mode = next;
+    demoMode = false;
+    document.querySelectorAll('[data-mode]').forEach((el) => (el.hidden = el.dataset.mode !== mode));
+    journeyBox.classList.toggle('locked', mode === 'file');
+    if (mode === 'file') journeyBox.open = true;
+    renderStatic();
+  }
+  document.getElementById('to-files').addEventListener('click', () => setMode('file'));
+  document.getElementById('to-url').addEventListener('click', () => setMode('url'));
   // في وضع الملفات بيانات الرحلة مطلوبة فتبقى مفتوحة
   journeyBox.addEventListener('toggle', () => {
-    if (currentMode() === 'file' && !journeyBox.open) journeyBox.open = true;
+    if (mode === 'file' && !journeyBox.open) journeyBox.open = true;
   });
-  form.querySelectorAll('input[name=source]').forEach((r) =>
-    r.addEventListener('change', () => {
-      demoMode = false;
-      applyMode();
-      renderFiles();
-    }),
-  );
-  applyMode();
 
   function renderFiles() {
     fileList.innerHTML = '';
     const items = demoMode ? demoFiles.map((name) => ({ name, demo: true })) : selectedFiles.map((f, i) => ({ name: f.name, i }));
     for (const it of items) {
       const li = document.createElement('li');
-      const ext = it.name.split('.').pop().toLowerCase();
       const tag = document.createElement('span');
       tag.className = 'ext';
-      tag.textContent = ext;
+      tag.textContent = it.name.split('.').pop().toLowerCase();
       const name = document.createElement('bdi');
       name.textContent = it.name;
       li.append(tag, name);
       if (it.demo) {
         const d = document.createElement('small');
-        d.textContent = 'ملف تجربة';
+        d.textContent = t('drop.demo');
         li.append(d);
       } else {
         const rm = document.createElement('button');
         rm.type = 'button';
-        rm.setAttribute('aria-label', `إزالة ${it.name}`);
-        rm.textContent = '×';
+        rm.setAttribute('aria-label', `${t('drop.remove')} ${it.name}`);
+        rm.innerHTML = window.QR.icon('x');
         rm.onclick = () => {
           selectedFiles.splice(it.i, 1);
           renderFiles();
@@ -101,9 +100,8 @@
   });
 
   document.getElementById('load-demo').addEventListener('click', async () => {
-    const { input, files } = await (await fetch('/api/demo')).json();
-    form.querySelector('input[name=source][value=file]').checked = true;
-    applyMode();
+    const { input, files } = await (await fetch(`/api/demo?lang=${window.QR.lang}`)).json();
+    setMode('file');
     for (const [k, v] of Object.entries(input)) {
       const el = form.elements[k];
       if (el && 'value' in el) el.value = v;
@@ -112,7 +110,7 @@
     selectedFiles = [];
     demoFiles = files;
     renderFiles();
-    form.scrollIntoView({ behavior: 'smooth' });
+    document.querySelector('.hero').scrollIntoView({ behavior: 'smooth' });
   });
 
   function showErrors(list) {
@@ -131,10 +129,9 @@
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     errorsBox.hidden = true;
-    const mode = currentMode();
     const fd = new FormData();
     for (const el of form.elements) {
-      if (!el.name || el.type === 'file' || el.type === 'radio') continue;
+      if (!el.name || el.type === 'file') continue;
       fd.append(el.name, el.value);
     }
     fd.append('source', mode);
@@ -143,24 +140,19 @@
 
     let res;
     try {
-      res = await fetch('/api/analyze', { method: 'POST', body: fd });
+      res = await fetch(`/api/analyze?lang=${window.QR.lang}`, { method: 'POST', body: fd });
     } catch {
-      return showErrors(['تعذر الاتصال بالخادم المحلي.']);
+      return showErrors([t('err.connect')]);
     }
     const body = await res.json().catch(() => ({}));
-    if (!res.ok) return showErrors(body.errors || ['تعذر بدء التحليل.']);
+    if (!res.ok) return showErrors(body.errors || [t('err.start')]);
 
     form.hidden = true;
     document.getElementById('waiting').hidden = false;
     poll(body.id);
   });
 
-  function setStage(progressText) {
-    const stage = /تحليل الدليل بنموذج/.test(progressText)
-      ? 'analyze'
-      : /تجهيز|اكتمل/.test(progressText)
-        ? 'finish'
-        : 'collect';
+  function setStage(stage) {
     const order = ['collect', 'analyze', 'finish'];
     const idx = order.indexOf(stage);
     document.querySelectorAll('#stages li').forEach((li) => {
@@ -172,18 +164,23 @@
 
   async function poll(id) {
     const progress = document.getElementById('progress');
-    setStage('');
+    let stage = 'collect';
+    setStage(stage);
     for (;;) {
       await new Promise((r) => setTimeout(r, 1000));
       let job;
       try {
-        job = await (await fetch(`/api/jobs/${id}`)).json();
+        job = await (await fetch(`/api/jobs/${id}?lang=${window.QR.lang}`)).json();
       } catch {
         continue;
       }
-      if (job.progress) {
+      if (job.progress && job.progress !== lastProgress) {
+        lastProgress = job.progress;
         progress.textContent = job.progress;
-        setStage(job.progress);
+        // المراحل تتقدم ولا ترجع: بعد جمع الدليل تأتي القواعد/النموذج ثم التجهيز
+        if (/rules|model|قواعد|النموذج|AI/i.test(job.progress)) stage = 'analyze';
+        if (/Preparing|تجهيز|Done|اكتمل/.test(job.progress)) stage = 'finish';
+        setStage(stage);
       }
       if (job.status === 'done') {
         location.href = `/results.html?id=${encodeURIComponent(id)}`;
@@ -192,9 +189,12 @@
       if (job.status === 'error' || job.error) {
         document.getElementById('waiting').hidden = true;
         form.hidden = false;
-        showErrors([job.error || 'تعذر إكمال التحليل.']);
+        showErrors([job.error || t('err.fail')]);
         return;
       }
     }
   }
+
+  window.QR.onLang(renderStatic);
+  setMode('url');
 })();

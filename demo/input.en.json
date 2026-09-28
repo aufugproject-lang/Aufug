@@ -1,0 +1,8 @@
+{
+  "product_name": "Nakheel Demo Store",
+  "journey": "Guest checkout",
+  "steps": "Open the product page “Khalas dates 1 kg”\nClick “أضف إلى السلة” (Add to cart)\nClick “إتمام الشراء” (Checkout) and choose to continue without an account\nFill in the shipping address and mobile number\nChoose a payment method and click “تأكيد الطلب” (Confirm order)\nThe order confirmation page shows the order number",
+  "success_condition": "A confirmation page with the order number appears after clicking “تأكيد الطلب”.",
+  "expected_features": "Guest checkout without creating an account\nDiscount code field on the checkout page\nShipping cost shown before payment\nAddress data kept when an error occurs",
+  "expected_events": "view_item — when the product page opens\nadd_to_cart — when Add to cart is clicked\nbegin_checkout — when Checkout is clicked\nadd_shipping_info — when the shipping address is saved\nadd_payment_info — when a payment method is chosen\npurchase — when the order confirmation page appears"
+}

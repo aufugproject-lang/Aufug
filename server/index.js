@@ -10,14 +10,21 @@ import { collectFromUrl } from './collectors/url.js';
 import { collectFromFiles } from './collectors/files.js';
 import { analyze } from './analyzer.js';
 import { generatePdf, reportFilename } from './report/pdf.js';
+import { t, normLang } from './i18n.js';
 
 const RESULTS_DIR = path.join(config.dataDir, 'results');
 const UPLOADS_DIR = path.join(config.dataDir, 'uploads');
 fs.mkdirSync(RESULTS_DIR, { recursive: true });
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-const DEMO_ID = 'demo';
+// نتيجة التجربة لكل لغة
+const DEMO_IDS = { demo: 'ar', 'demo-en': 'en' };
+// تُعاد نتيجة التجربة عند كل تشغيل حتى تعكس آخر نسخة من القواعد والقالب
+for (const id of Object.keys(DEMO_IDS)) fs.rmSync(path.join(RESULTS_DIR, `${id}.json`), { force: true });
 const jobs = new Map(); // id -> { status, progress, error }
+
+// لغة الطلب: ?lang= ثم حقل النموذج، والعربية افتراضيًا
+const reqLang = (req) => normLang(req.query.lang || (req.body && req.body.lang));
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -35,79 +42,91 @@ const upload = multer({
     file.originalname = Buffer.from(file.originalname, 'latin1').toString('utf8');
     const ext = path.extname(file.originalname).slice(1).toLowerCase();
     if (ALLOWED_EXTENSIONS.includes(ext)) cb(null, true);
-    else cb(new Error(`نوع الملف غير مدعوم: ${file.originalname}. الأنواع المسموحة: png, jpg, txt, md, json, har, html`));
+    else cb(new Error(t(reqLang(req), 'input.bad_file', { name: file.originalname })));
   },
 });
 
 const resultPath = (id) => path.join(RESULTS_DIR, `${id}.json`);
+const thumbPath = (id) => path.join(RESULTS_DIR, `${id}.jpg`);
 const validId = (id) => /^[a-z0-9-]{1,64}$/i.test(id);
 
-async function loadDemo() {
-  const input = JSON.parse(await fsp.readFile(path.join(config.demoDir, 'input.json'), 'utf8'));
+async function loadDemo(lang) {
+  const pick = async (base) => {
+    const en = path.join(config.demoDir, `${base}.en.json`);
+    const file = lang === 'en' && fs.existsSync(en) ? en : path.join(config.demoDir, `${base}.json`);
+    return JSON.parse(await fsp.readFile(file, 'utf8'));
+  };
   const filesDir = path.join(config.demoDir, 'files');
   const files = (await fsp.readdir(filesDir)).sort().map((name) => ({ path: path.join(filesDir, name), originalname: name }));
-  const recorded = JSON.parse(await fsp.readFile(path.join(config.demoDir, 'recorded-analysis.json'), 'utf8'));
-  return { input, files, recorded };
+  return { input: await pick('input'), files, recorded: await pick('recorded-analysis') };
 }
 
 async function runJob(id, input, files, { recorded = null } = {}) {
   const job = jobs.get(id);
+  const L = input.lang;
   const progress = (msg) => {
     job.progress = msg;
   };
   job.status = 'running';
   try {
-    progress(input.source === 'url' ? 'تشغيل المتصفح' : 'قراءة الملفات');
-    const collected = input.source === 'url' ? await collectFromUrl(input, progress) : await collectFromFiles(files);
+    progress(t(L, input.source === 'url' ? 'progress.browser' : 'progress.files'));
+    const collected = input.source === 'url' ? await collectFromUrl(input, progress) : await collectFromFiles(files, L);
     if (input.source === 'url') completeUrlInput(input, collected);
-    progress('تجهيز النتائج');
+    // صورة مصغرة للصفحة الأولى لعرضها في رأس صفحة النتائج فقط (لا تدخل في التقرير)
+    const thumbnail = collected.thumbnail;
+    delete collected.thumbnail;
+    if (thumbnail) await fsp.writeFile(thumbPath(id), thumbnail);
+    progress(t(L, 'progress.rules'));
     const result = await analyze(input, collected, { recordedAnalysis: recorded, onProgress: progress });
     result.id = id;
+    result.meta.has_thumbnail = Boolean(thumbnail);
+    progress(t(L, 'progress.finish'));
     await fsp.writeFile(resultPath(id), JSON.stringify(result, null, 2));
     job.status = 'done';
-    progress('اكتمل');
+    progress(t(L, 'progress.done'));
   } catch (e) {
     console.error(e);
     job.status = 'error';
-    job.error = `تعذر إكمال التحليل: ${String(e.message || e).split('\n')[0]}`;
+    job.error = t(L, 'job.failed', { msg: String(e.message || e).split('\n')[0] });
   }
 }
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(ROOT, 'public')));
-app.use('/fonts', express.static(path.join(ROOT, 'node_modules/@fontsource/noto-naskh-arabic/files')));
+app.use('/fonts', express.static(path.join(ROOT, 'node_modules/@fontsource/ibm-plex-sans-arabic/files')));
 
 app.get('/api/status', (req, res) => {
   res.json({ model_configured: modelConfigured(), model: config.model });
 });
 
 app.get('/api/demo', async (req, res) => {
-  const { input, files } = await loadDemo();
+  const { input, files } = await loadDemo(reqLang(req));
   res.json({ input, files: files.map((f) => f.originalname) });
 });
 
 app.post('/api/analyze', upload.array('files', 20), async (req, res) => {
   const id = req.jobId || crypto.randomUUID();
+  const lang = reqLang(req);
   let files = (req.files || []).map((f) => ({ path: f.path, originalname: f.originalname }));
   let input;
   let recorded = null;
 
   if (req.body.demo === '1') {
     // بيانات التجربة: ملفات جاهزة؛ بدون مفتاح نموذج يُستخدم التحليل المسجل لها
-    const demo = await loadDemo();
-    input = normalizeInput({ ...demo.input, source: 'file' });
+    const demo = await loadDemo(lang);
+    input = normalizeInput({ ...demo.input, source: 'file', lang });
     files = demo.files;
     if (!modelConfigured()) recorded = demo.recorded;
   } else {
-    input = normalizeInput(req.body);
+    input = normalizeInput({ ...req.body, lang });
     if (input.source === 'url') files = [];
   }
 
   const errors = validateInput(input, files.length);
   if (errors.length) return res.status(400).json({ errors });
 
-  jobs.set(id, { status: 'queued', progress: 'في الانتظار' });
+  jobs.set(id, { status: 'queued', progress: t(lang, 'progress.queued') });
   runJob(id, input, files, { recorded });
   res.status(202).json({ id });
 });
@@ -116,17 +135,18 @@ app.get('/api/jobs/:id', (req, res) => {
   const job = jobs.get(req.params.id);
   if (job) return res.json(job);
   if (validId(req.params.id) && fs.existsSync(resultPath(req.params.id))) return res.json({ status: 'done' });
-  res.status(404).json({ error: 'المهمة غير موجودة.' });
+  res.status(404).json({ error: t(reqLang(req), 'job.not_found') });
 });
 
 async function readResult(id) {
   if (!validId(id)) return null;
-  if (id === DEMO_ID && !fs.existsSync(resultPath(id))) {
+  if (DEMO_IDS[id] && !fs.existsSync(resultPath(id))) {
     // نتيجة التجربة تُنشأ عند أول طلب لتفتح صفحة النتائج مباشرة بدون مفتاح نموذج
-    const demo = await loadDemo();
-    const input = normalizeInput({ ...demo.input, source: 'file' });
-    const result = await analyze(input, await collectFromFiles(demo.files), { recordedAnalysis: demo.recorded });
-    result.id = DEMO_ID;
+    const lang = DEMO_IDS[id];
+    const demo = await loadDemo(lang);
+    const input = normalizeInput({ ...demo.input, source: 'file', lang });
+    const result = await analyze(input, await collectFromFiles(demo.files, lang), { recordedAnalysis: demo.recorded });
+    result.id = id;
     await fsp.writeFile(resultPath(id), JSON.stringify(result, null, 2));
   }
   try {
@@ -138,13 +158,18 @@ async function readResult(id) {
 
 app.get('/api/results/:id', async (req, res) => {
   const result = await readResult(req.params.id);
-  if (!result) return res.status(404).json({ error: 'النتيجة غير موجودة.' });
+  if (!result) return res.status(404).json({ error: t(reqLang(req), 'result.not_found') });
   res.json(result);
+});
+
+app.get('/api/results/:id/thumb.jpg', (req, res) => {
+  if (!validId(req.params.id) || !fs.existsSync(thumbPath(req.params.id))) return res.status(404).end();
+  res.sendFile(thumbPath(req.params.id));
 });
 
 app.get('/api/results/:id/report.pdf', async (req, res) => {
   const result = await readResult(req.params.id);
-  if (!result) return res.status(404).json({ error: 'النتيجة غير موجودة.' });
+  if (!result) return res.status(404).json({ error: t(reqLang(req), 'result.not_found') });
   try {
     const pdf = await generatePdf(result);
     const name = reportFilename(result);
@@ -154,7 +179,7 @@ app.get('/api/results/:id/report.pdf', async (req, res) => {
     res.send(pdf);
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: `تعذر إنشاء ملف PDF: ${String(e.message || e).split('\n')[0]}` });
+    res.status(500).json({ error: t(result.meta.lang, 'pdf.failed', { msg: String(e.message || e).split('\n')[0] }) });
   }
 });
 
@@ -163,6 +188,6 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(config.port, () => {
-  console.log(`المنصة تعمل على http://localhost:${config.port}`);
-  console.log(modelConfigured() ? `النموذج: ${config.model}` : 'لا يوجد مفتاح نموذج: ستُعرض النتائج المجمعة من الدليل فقط.');
+  console.log(`Quality Review is running: http://localhost:${config.port}`);
+  console.log(modelConfigured() ? `AI model: ${config.model}` : 'No model key: analysis uses the evidence-based rules only.');
 });
