@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import Anthropic from '@anthropic-ai/sdk';
 import { config, modelConfigured, CRITERIA, SEVERITIES, CONFIDENCES } from './config.js';
 import { checkAnalytics, deterministicAnalytics } from './analytics.js';
+import { ruleFindings } from './rules.js';
 
 const SEVERITY_WEIGHT = { high: 1.5, medium: 0.75, low: 0.25 };
 
@@ -101,7 +102,7 @@ function evidenceForModel(collected) {
   };
 }
 
-function buildUserContent(input, collected, analyticsChecks) {
+function buildUserContent(input, collected, analyticsChecks, priorFindings = []) {
   const brief = {
     product_name: input.product_name,
     journey: input.journey,
@@ -123,6 +124,14 @@ function buildUserContent(input, collected, analyticsChecks) {
       type: 'text',
       text: `نتيجة الفحص الآلي لأحداث التحليلات (observed=true يعني أن الاسم ظهر في الدليل):\n${JSON.stringify(analyticsChecks, null, 1)}`,
     },
+    {
+      type: 'text',
+      text: `ملاحظات سجلتها القواعد الآلية مسبقًا وستُعرض كما هي. لا تكررها ولا تعِد صياغتها؛ أضف فقط ما لا تغطيه:\n${JSON.stringify(
+        priorFindings.map(({ criterion, step, evidence_source, evidence }) => ({ criterion, step, evidence_source, evidence })),
+        null,
+        1,
+      )}`,
+    },
   ];
   return content;
 }
@@ -139,9 +148,9 @@ async function imageBlocks(collected) {
   return blocks;
 }
 
-async function callModel(input, collected, analyticsChecks) {
+async function callModel(input, collected, analyticsChecks, priorFindings) {
   const client = new Anthropic();
-  const content = [...(await imageBlocks(collected)), ...buildUserContent(input, collected, analyticsChecks)];
+  const content = [...(await imageBlocks(collected)), ...buildUserContent(input, collected, analyticsChecks, priorFindings)];
   const stream = client.messages.stream({
     model: config.model,
     max_tokens: 32000,
@@ -226,8 +235,13 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
   const det = deterministicAnalytics(analyticsChecks, collected);
   const warnings = collectWarnings(collected);
 
-  let mode = 'evidence_only';
-  let notice = 'الحكم الآلي يحتاج إعداد نموذج الذكاء الاصطناعي (متغير ANTHROPIC_API_KEY). المعروض أدناه هو الدليل المجموع والفحوص الآلية فقط، بلا ملاحظات أو درجة.';
+  // القواعد الآلية تعمل دائمًا (ما عدا بيانات التجربة المسجلة) ولا تحتاج نموذجًا
+  const rules = recordedAnalysis ? { findings: [], insufficient: [] } : ruleFindings(input, collected);
+  const RULES_NOTICE =
+    'التحليل تم بقواعد آلية ثابتة مبنية على الدليل فقط: الخطوات المتعثرة، الروابط المعطوبة، أخطاء الخادم، رسائل الخطأ الظاهرة، وإمكانية الوصول. لتقييم أعمق لتجربة العميل واكتمال الميزات فعّل النموذج بمتغير ANTHROPIC_API_KEY.';
+
+  let mode = 'rules';
+  let notice = RULES_NOTICE;
   let modelOut = null;
 
   if (recordedAnalysis) {
@@ -237,18 +251,18 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
   } else if (modelConfigured()) {
     onProgress('تحليل الدليل بنموذج الذكاء الاصطناعي');
     try {
-      modelOut = await callModel(input, collected, analyticsChecks);
+      modelOut = await callModel(input, collected, analyticsChecks, rules.findings);
       mode = 'model';
       notice = null;
     } catch (e) {
-      notice = `تعذر استدعاء النموذج (${String(e.message || e).split('\n')[0]}). المعروض هو الدليل المجموع والفحوص الآلية فقط، بلا ملاحظات أو درجة.`;
+      notice = `تعذر استدعاء النموذج (${String(e.message || e).split('\n')[0]}). ${RULES_NOTICE}`;
     }
   }
 
   let completed;
   let stoppedAt;
-  const insufficient = [...det.insufficient];
-  let findings = [];
+  const insufficient = [...det.insufficient, ...rules.insufficient];
+  let findings = [...rules.findings];
   let score = null;
   let scoring = null;
   let missing = det.missing;
@@ -272,7 +286,7 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
 
   if (modelOut) {
     const { findings: kept, rejected } = validateFindings(modelOut.findings, collected, input);
-    findings = kept;
+    findings = [...findings, ...kept.map((f) => ({ ...f, origin: mode === 'recorded_demo' ? 'recorded' : 'model' }))];
     insufficient.push(...(modelOut.insufficient_evidence || []), ...rejected);
     successBasis = hasCondition ? modelOut.success_condition_basis || null : null;
 
@@ -309,9 +323,6 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
       return e ? { event_name: m.event_name, when: e.when || m.when, why: e.why || m.why } : m;
     });
 
-    const s = computeScore(findings);
-    score = s.score;
-    scoring = s;
   } else {
     if (collected.source === 'url' && collected.all_steps_executed) {
       if (!hasCondition) insufficient.push(noConditionNote);
@@ -322,6 +333,11 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
     for (const f of collected.files || [])
       if (f.kind === 'image') insufficient.push(`الصورة «${f.file}» لا تُقرأ إلا بالنموذج؛ لم تُحلل.`);
   }
+
+  const order = { high: 0, medium: 1, low: 2 };
+  findings.sort((a, b) => order[a.severity] - order[b.severity] || a.step - b.step);
+  scoring = computeScore(findings);
+  score = scoring.score;
 
   return {
     product_name: input.product_name,

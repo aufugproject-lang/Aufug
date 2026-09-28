@@ -72,3 +72,22 @@ test('وضع الرابط يكفيه الرابط وحده', async () => {
   assert.deepEqual(input.steps, [{ number: 1, text: 'افتح «من نحن»' }]);
   assert.ok(validateInput(normalizeInput({ source: 'file' }), 0).length >= 4);
 });
+
+test('القواعد الآلية تُنتج ملاحظات مرتبطة بالدليل فقط', async () => {
+  const { ruleFindings } = await import('../server/rules.js');
+  const input = { journey: 'استكشاف', steps: [{ number: 1, text: 'افتح «الأسعار» (/pricing)' }], expected_features: [] };
+  const page = { url: 'https://s.test/', lang: 'ar', error_messages: [], accessibility: { unlabeled_fields: ['phone'], images_without_alt: 0, unnamed_buttons: 0 } };
+  const collected = {
+    source: 'url',
+    target_url: 'https://s.test/',
+    steps: [
+      { number: 0, status: 'done', page, network: [{ method: 'POST', url: 'https://s.test/api/orders', status: 500 }], console_errors: [] },
+      { number: 1, auto: true, text: 'افتح «الأسعار» (/pricing)', status: 'failed', error: 'الصفحة /pricing أعادت الحالة 404.', page, network: [], console_errors: [] },
+    ],
+  };
+  const { findings } = ruleFindings(input, collected);
+  const rules = findings.map((f) => f.rule).sort();
+  assert.deepEqual(rules, ['broken_link', 'server_error', 'unlabeled_fields']);
+  assert.ok(findings.every((f) => f.evidence && f.evidence_source.startsWith('step:') && f.origin === 'rule'));
+  assert.equal(findings.find((f) => f.rule === 'server_error').severity, 'high');
+});

@@ -365,3 +365,6 @@ table.findings td:nth-child(3) { min-width: 240px; }
   .options-body { padding: 4px 16px 18px; }
   .subnav { top: 53px; }
 }
+
+.origin { display: inline-block; margin-right: 8px; font-size: 0.7rem; padding: 0 7px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); color: var(--muted); }
+.origin.model { background: var(--accent-soft); color: var(--accent); border-color: transparent; }

@@ -49,7 +49,7 @@ export function formatDate(iso) {
 }
 
 function completionText(r) {
-  if (r.completed === true && r.meta.analysis_mode === 'evidence_only') return 'نُفذت كل الخطوات — تحقق شرط النجاح يحتاج حكم النموذج';
+  if (r.completed === true && ['evidence_only', 'rules'].includes(r.meta.analysis_mode)) return 'نُفذت كل الخطوات — تحقق شرط النجاح يحتاج حكم النموذج';
   if (r.completed === true) return 'اكتملت الرحلة';
   if (r.completed === false) return r.stopped_at_step != null ? `لم تكتمل — توقفت عند الخطوة ${r.stopped_at_step}` : 'لم تكتمل';
   return 'غير محدد — الدليل لا يكفي للحكم';
@@ -87,7 +87,7 @@ export function renderReport(r) {
       <td>${esc(CRITERION_LABELS[f.criterion] || f.criterion)}<div class="code-tag">${esc(f.criterion)}</div></td>
       <td class="sev sev-${esc(f.severity)}">${esc(SEVERITY_LABELS[f.severity])}</td>
       <td>${f.step}<div class="small muted">${bidi(stepLabel(r, f.step))}</div></td>
-      <td>${bidi(f.evidence)}<div class="small muted">المصدر: <span class="ltr">${esc(f.evidence_source)}</span></div></td>
+      <td>${bidi(f.evidence)}<div class="small muted">المصدر: <span class="ltr">${esc(f.evidence_source)}</span>${f.origin === 'rule' ? ' · قاعدة آلية' : ''}</div></td>
       <td>${bidi(f.impact)}</td>
       <td>${bidi(f.recommendation)}</td>
       <td class="nowrap">${esc(CONFIDENCE_LABELS[f.confidence])}</td>
@@ -167,7 +167,7 @@ export function renderReport(r) {
     <tbody>${findingsRows}</tbody>
   </table>
   <p class="review-note">الرحلة لكل الملاحظات: ${bidi(r.journey)}. التوصيات للمراجعة البشرية.</p>`
-      : `<p class="muted">لا توجد ملاحظات مسجلة.${r.meta.analysis_mode === 'evidence_only' ? ' الحكم الآلي يحتاج إعداد النموذج.' : ''}</p>`
+      : `<p class="muted">لا توجد ملاحظات مسجلة.${r.meta.analysis_mode === 'rules' ? ' لم تكتشف القواعد الآلية مشاكل في الدليل المجموع.' : ''}</p>`
   }
 </section>
 

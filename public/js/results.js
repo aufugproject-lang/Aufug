@@ -45,7 +45,7 @@
   };
 
   function completion(r) {
-    if (r.completed === true && r.meta.analysis_mode === 'evidence_only') return { text: 'نُفذت الخطوات', cls: 'unknown', icon: '•' };
+    if (r.completed === true && ['evidence_only', 'rules'].includes(r.meta.analysis_mode)) return { text: 'نُفذت الخطوات', cls: 'unknown', icon: '•' };
     if (r.completed === true) return { text: 'اكتملت', cls: 'ok', icon: '✓' };
     if (r.completed === false) return { text: 'لم تكتمل', cls: 'bad', icon: '✕' };
     return { text: 'غير محدد', cls: 'unknown', icon: '?' };
@@ -91,6 +91,7 @@
             h('span', { class: 'chip-soft' }, formatDate(r.meta.created_at)),
             r.meta.analysis_mode === 'model' ? h('span', { class: 'chip-soft ok' }, 'حكم آلي بالنموذج') : null,
             r.meta.analysis_mode === 'recorded_demo' ? h('span', { class: 'chip-soft info' }, 'بيانات تجربة') : null,
+            r.meta.analysis_mode === 'rules' ? h('span', { class: 'chip-soft' }, 'تحليل بقواعد آلية') : null,
             r.meta.analysis_mode === 'evidence_only' ? h('span', { class: 'chip-soft warn' }, 'دليل فقط') : null,
           ),
           h('h1', {}, r.product_name),
@@ -103,7 +104,7 @@
     );
 
     if (r.meta.notice)
-      app.append(h('div', { class: `notice ${r.meta.analysis_mode === 'recorded_demo' ? 'info' : 'warn'}`, role: 'status' }, r.meta.notice));
+      app.append(h('div', { class: `notice ${['recorded_demo', 'rules'].includes(r.meta.analysis_mode) && !/تعذر/.test(r.meta.notice) ? 'info' : 'warn'}`, role: 'status' }, r.meta.notice));
 
     // الملخص
     app.append(
@@ -194,7 +195,7 @@
     const head = h('div', { class: 'panel-head' }, h('h2', {}, 'جدول الملاحظات'));
     sec.append(head);
     if (!r.findings.length) {
-      sec.append(h('p', { class: 'empty' }, r.meta.analysis_mode === 'evidence_only' ? 'لا توجد ملاحظات: الحكم الآلي يحتاج إعداد النموذج. راجع الدليل المجموع أدناه.' : 'لم تُسجل ملاحظات مبنية على الدليل.'));
+      sec.append(h('p', { class: 'empty' }, r.meta.analysis_mode === 'rules' ? 'لم تكتشف القواعد الآلية مشاكل في الدليل المجموع. راجع الدليل أدناه، وفعّل النموذج لتقييم أعمق.' : 'لم تُسجل ملاحظات مبنية على الدليل.'));
       return sec;
     }
     const state = { sev: 'all', crit: 'all' };
@@ -208,7 +209,7 @@
           h('tr', { class: `row-${f.severity}` },
             h('td', {}, h('span', { class: `badge sev-${f.severity}` }, LEVEL[f.severity]), h('div', { class: 'crit' }, CRITERION[f.criterion] || f.criterion), h('code', { class: 'tiny' }, f.criterion)),
             h('td', {}, h('span', { class: 'step-pill' }, String(f.step)), h('div', { class: 'muted small' }, bd(stepText(r, f.step)))),
-            h('td', {}, bd(f.evidence), h('div', { class: 'src' }, 'المصدر: ', h('bdi', {}, f.evidence_source))),
+            h('td', {}, bd(f.evidence), h('div', { class: 'src' }, 'المصدر: ', h('bdi', {}, f.evidence_source), f.origin === 'rule' ? h('span', { class: 'origin' }, 'قاعدة آلية') : f.origin === 'model' ? h('span', { class: 'origin model' }, 'النموذج') : null)),
             h('td', {}, bd(f.impact)),
             h('td', {}, bd(f.recommendation), h('div', { class: 'review' }, 'بانتظار مراجعة بشرية')),
             h('td', {}, h('span', { class: `conf conf-${f.confidence}` }, LEVEL[f.confidence])),
