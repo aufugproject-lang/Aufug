@@ -48,7 +48,7 @@
         <h1><span data-i18n="home.title1"></span><br><span data-i18n="home.title2"></span></h1>
         <p class="lead" data-i18n="home.lead"></p>
 
-        <div class="mode-url" data-mode="url">
+        <div class="mode-url">
           <div class="url-bar">
             <label class="url-field">
               <svg class="i"><use href="#i-link"/></svg>
@@ -57,86 +57,13 @@
             <button type="submit" class="btn primary big"><span data-i18n="home.start"></span><svg class="i flip"><use href="#i-arrow"/></svg></button>
           </div>
           <p class="note"><svg class="i"><use href="#i-lock"/></svg><span data-i18n="home.note"></span></p>
+          <div id="form-errors" class="errors" role="alert" hidden></div>
         </div>
 
-        <div class="mode-file" data-mode="file" hidden>
-          <label class="dropzone" id="dropzone">
-            <input type="file" id="files" multiple accept=".png,.jpg,.jpeg,.txt,.md,.json,.har,.html,.htm">
-            <span class="dz-icon"><svg class="i"><use href="#i-upload"/></svg></span>
-            <strong data-i18n="drop.title"></strong>
-            <small dir="ltr">png · jpg · txt · md · json · har · html</small>
-          </label>
-          <ul id="file-list" class="file-chips"></ul>
-        </div>
-
-        <p class="mode-switch">
-          <button type="button" class="linkish" id="to-files" data-mode="url"><svg class="i"><use href="#i-clip"/></svg><span data-i18n="home.or_files"></span></button>
-          <button type="button" class="linkish" id="to-url" data-mode="file" hidden><svg class="i"><use href="#i-link"/></svg><span data-i18n="home.back_url"></span></button>
-        </p>
       </div>
     </section>
 
     <div class="container">
-      <div id="form-errors" class="errors" role="alert" hidden></div>
-
-      <details class="panel options" id="journey-box">
-        <summary>
-          <svg class="i"><use href="#i-list"/></svg>
-          <span class="sum-title" id="journey-title"></span>
-          <span class="sum-badge" id="journey-badge"></span>
-          <svg class="i chev"><use href="#i-chevron"/></svg>
-        </summary>
-
-        <div class="options-body">
-          <div class="grid-2" data-mode="url">
-            <label class="field">
-              <span data-i18n="f.user"></span>
-              <input name="test_username" dir="ltr" autocomplete="off">
-            </label>
-            <label class="field">
-              <span data-i18n="f.pass"></span>
-              <input name="test_password" type="password" dir="ltr" autocomplete="new-password">
-            </label>
-          </div>
-          <div class="grid-2">
-            <label class="field">
-              <span data-i18n="f.product"></span>
-              <input name="product_name" id="product_name">
-            </label>
-            <label class="field">
-              <span data-i18n="f.journey"></span>
-              <input name="journey" data-i18n-ph="f.journey_ph">
-            </label>
-          </div>
-          <label class="field">
-            <span><span data-i18n="f.steps"></span> <em data-i18n="f.steps_hint"></em></span>
-            <textarea name="steps" rows="5" data-i18n-ph="f.steps_ph" dir="auto"></textarea>
-          </label>
-          <details class="syntax" data-mode="url">
-            <summary data-i18n="syntax.title"></summary>
-            <table id="syntax-table"></table>
-            <p data-i18n="syntax.note"></p>
-          </details>
-          <label class="field">
-            <span><span data-i18n="f.condition"></span> <em data-i18n="f.condition_hint"></em></span>
-            <input name="success_condition" data-i18n-ph="f.condition_ph" dir="auto">
-          </label>
-          <div class="grid-2">
-            <label class="field">
-              <span><span data-i18n="f.features"></span> <em data-i18n="f.features_hint"></em></span>
-              <textarea name="expected_features" rows="4" dir="auto"></textarea>
-            </label>
-            <label class="field">
-              <span><span data-i18n="f.events"></span> <em data-i18n="f.events_hint"></em></span>
-              <textarea name="expected_events" rows="4" data-i18n-ph="f.events_ph" dir="auto"></textarea>
-            </label>
-          </div>
-        </div>
-      </details>
-
-      <div class="actions" data-mode="file" hidden>
-        <button type="submit" class="btn primary big"><span data-i18n="home.start"></span><svg class="i flip"><use href="#i-arrow"/></svg></button>
-      </div>
 
       <section class="features">
         <div><span class="f-icon"><svg class="i"><use href="#i-layers"/></svg></span><strong data-i18n="feat.1.t"></strong><small data-i18n="feat.1.d"></small></div>
@@ -156,10 +83,7 @@
       </section>
 
       <p class="demo-line">
-        <span data-i18n="demo.line"></span>
-        <button type="button" id="load-demo" class="linkish" data-i18n="demo.fill"></button>
-        <span data-i18n="demo.or"></span>
-        <a id="demo-link" href="/results.html?id=demo" data-i18n="demo.open"></a>
+        <a id="demo-link" class="btn ghost" href="/results.html?id=demo"><svg class="i"><use href="#i-file"/></svg><span data-i18n="demo.sample"></span></a>
       </p>
     </div>
   </form>

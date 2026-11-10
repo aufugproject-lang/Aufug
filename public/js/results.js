@@ -83,9 +83,7 @@
   // ---------- الرأس والمؤشرات ----------
 
   function renderHead(r) {
-    const auto = r.meta.auto_explored;
     const url = r.collected_evidence && r.collected_evidence.target_url;
-    const modeKey = { model: 'r.mode.model', rules: 'r.mode.rules', recorded_demo: 'r.mode.demo', evidence_only: 'r.mode.evidence' }[r.meta.analysis_mode];
     const thumb = r.meta.has_thumbnail
       ? h('img', { class: 'thumb', src: `/api/results/${encodeURIComponent(r.id)}/thumb.jpg`, alt: '' })
       : h('div', { class: 'thumb placeholder' }, ic(r.source === 'url' ? 'globe' : 'clip'));
@@ -102,12 +100,6 @@
         h('div', { class: 'site-info' },
           h('div', { class: 'site-name' }, h('strong', { dir: 'auto' }, r.product_name),
             url ? h('a', { href: url, target: '_blank', rel: 'noopener', class: 'ext-link', 'aria-label': url }, ic('external')) : null),
-          url ? h('bdi', { class: 'site-url' }, url) : null,
-          h('div', { class: 'chips' },
-            h('span', { class: 'chip-soft' }, ic('list'), h('span', { dir: 'auto' }, `${t('r.journey')}: ${r.journey}`)),
-            h('span', { class: 'chip-soft' }, t(r.source === 'url' ? (auto ? 'r.src.auto' : 'r.src.url') : 'r.src.file')),
-            modeKey ? h('span', { class: `chip-soft mode-${r.meta.analysis_mode}` }, t(modeKey)) : null,
-          ),
         ),
         h('div', { class: 'site-meta' },
           h('div', { class: 'date' }, h('small', { class: 'muted' }, t('r.date')), h('span', {}, formatDate(r.meta.created_at))),
@@ -425,10 +417,6 @@
     document.title = `${r.product_name} — Quality Review`;
     app.innerHTML = '';
     app.append(...renderHead(r));
-    const rLang = r.meta.lang || 'ar';
-    if (rLang !== window.QR.lang) app.append(h('div', { class: 'notice info' }, ic('globe'), h('span', {}, t('r.lang_note'))));
-    if (r.meta.notice)
-      app.append(h('div', { class: `notice ${/تعذر|could not/i.test(r.meta.notice) ? 'warn' : 'info'}`, role: 'status', dir: 'auto' }, ic('info'), h('span', {}, bd(r.meta.notice))));
     app.append(renderKpis(r), renderTabs(r));
     const panel = { summary: tabSummary, findings: tabFindings, events: tabEvents, insufficient: tabInsufficient, evidence: tabEvidence }[activeTab](r);
     app.append(panel);
