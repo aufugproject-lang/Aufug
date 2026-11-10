@@ -47,7 +47,7 @@ const upload = multer({
 });
 
 const resultPath = (id) => path.join(RESULTS_DIR, `${id}.json`);
-const thumbPath = (id) => path.join(RESULTS_DIR, `${id}.jpg`);
+const logoPath = (id) => path.join(RESULTS_DIR, `${id}.logo`);
 const validId = (id) => /^[a-z0-9-]{1,64}$/i.test(id);
 
 async function loadDemo(lang) {
@@ -72,14 +72,14 @@ async function runJob(id, input, files, { recorded = null } = {}) {
     progress(t(L, input.source === 'url' ? 'progress.browser' : 'progress.files'));
     const collected = input.source === 'url' ? await collectFromUrl(input, progress) : await collectFromFiles(files, L);
     if (input.source === 'url') completeUrlInput(input, collected);
-    // صورة مصغرة للصفحة الأولى لعرضها في رأس صفحة النتائج فقط (لا تدخل في التقرير)
-    const thumbnail = collected.thumbnail;
-    delete collected.thumbnail;
-    if (thumbnail) await fsp.writeFile(thumbPath(id), thumbnail);
+    // شعار الموقع لعرضه في رأس صفحة النتائج فقط (لا يدخل في التقرير)
+    const logo = collected.logo;
+    delete collected.logo;
+    if (logo) await fsp.writeFile(logoPath(id), logo.body);
     progress(t(L, 'progress.rules'));
     const result = await analyze(input, collected, { recordedAnalysis: recorded, onProgress: progress });
     result.id = id;
-    result.meta.has_thumbnail = Boolean(thumbnail);
+    result.meta.logo_type = logo ? logo.type : null;
     progress(t(L, 'progress.finish'));
     await fsp.writeFile(resultPath(id), JSON.stringify(result, null, 2));
     job.status = 'done';
@@ -162,9 +162,14 @@ app.get('/api/results/:id', async (req, res) => {
   res.json(result);
 });
 
-app.get('/api/results/:id/thumb.jpg', (req, res) => {
-  if (!validId(req.params.id) || !fs.existsSync(thumbPath(req.params.id))) return res.status(404).end();
-  res.sendFile(thumbPath(req.params.id));
+app.get('/api/results/:id/logo', async (req, res) => {
+  const result = await readResult(req.params.id);
+  if (!result || !result.meta.logo_type || !fs.existsSync(logoPath(req.params.id))) return res.status(404).end();
+  // الشعار محتوى من موقع خارجي: يُعرض كصورة فقط، ولا يُسمح بتشغيل أي شيء منه (مهم لملفات SVG)
+  res.setHeader('Content-Type', result.meta.logo_type);
+  res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.sendFile(logoPath(req.params.id));
 });
 
 app.get('/api/results/:id/report.pdf', async (req, res) => {

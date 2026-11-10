@@ -118,6 +118,55 @@ function navCandidatesInPage() {
   return out.sort((a, b) => b.score - a.score || a.order - b.order);
 }
 
+// يُنفَّذ داخل الصفحة: روابط مرشحة لشعار الموقع، الأفضل أولًا.
+// شعار ظاهر في الترويسة، ثم أيقونة الجوال (apple-touch-icon)، ثم أيقونات الموقع الأكبر حجمًا.
+function logoCandidatesInPage() {
+  const abs = (u) => {
+    try {
+      return new URL(u, location.href).href;
+    } catch {
+      return null;
+    }
+  };
+  const out = [];
+  const hint = /logo|brand|شعار/i;
+  document.querySelectorAll('header img, nav img, [class*="logo" i] img, [id*="logo" i] img, img[class*="logo" i], img[id*="logo" i], img[alt*="logo" i], img[src*="logo" i]').forEach((img) => {
+    const r = img.getBoundingClientRect();
+    const hinted = hint.test(`${img.className} ${img.id} ${img.alt} ${img.getAttribute('src')} ${img.parentElement && img.parentElement.className}`);
+    if (r.width >= 16 && r.height >= 16 && r.top < 400 && (hinted || img.closest('header, nav'))) out.push({ url: abs(img.currentSrc || img.src), rank: hinted ? 0 : 1 });
+  });
+  const size = (l) => Math.max(0, ...String(l.getAttribute('sizes') || '').split(/\s+/).map((s) => parseInt(s, 10) || 0));
+  [...document.querySelectorAll('link[rel~="apple-touch-icon"], link[rel~="apple-touch-icon-precomposed"]')]
+    .sort((a, b) => size(b) - size(a))
+    .forEach((l) => out.push({ url: abs(l.getAttribute('href')), rank: 2 }));
+  [...document.querySelectorAll('link[rel~="icon"]')]
+    .sort((a, b) => size(b) - size(a))
+    .forEach((l) => out.push({ url: abs(l.getAttribute('href')), rank: 3 }));
+  out.push({ url: abs('/favicon.ico'), rank: 4 });
+  const seen = new Set();
+  return out
+    .filter((c) => c.url && /^https?:/.test(c.url) && !seen.has(c.url) && seen.add(c.url))
+    .sort((a, b) => a.rank - b.rank)
+    .map((c) => c.url)
+    .slice(0, 8);
+}
+
+// يحمّل أول مرشح يعيد صورة فعلية (حتى 1MB)
+async function fetchLogo(context, candidates) {
+  for (const url of candidates) {
+    try {
+      const res = await context.request.get(url, { timeout: 8000 });
+      if (!res.ok()) continue;
+      const type = String(res.headers()['content-type'] || '').split(';')[0].trim().toLowerCase();
+      if (!/^image\/(png|jpe?g|gif|webp|svg\+xml|x-icon|vnd\.microsoft\.icon|avif)$/.test(type)) continue;
+      const body = await res.body();
+      if (body.length < 50 || body.length > 1024 * 1024) continue;
+      return { body, type };
+    } catch {}
+  }
+  return null;
+}
+
 const LOGIN_TEXT = /(تسجيل\s*الدخول|دخول|login|log\s*in|sign\s*in)/i;
 
 export async function collectFromUrl(input, onProgress = () => {}) {
@@ -198,7 +247,7 @@ export async function collectFromUrl(input, onProgress = () => {}) {
 
   const steps = [];
   let stoppedAt = null;
-  let thumbnail = null;
+  let logo = null;
   const timeout = config.stepTimeoutMs;
 
   const settle = async () => {
@@ -219,8 +268,8 @@ export async function collectFromUrl(input, onProgress = () => {}) {
     try {
       await page.goto(input.url, { waitUntil: 'domcontentloaded', timeout: timeout * 3 });
       await settle();
-      // صورة مصغرة للواجهة فقط (رأس صفحة النتائج)، لا تدخل في التقرير
-      thumbnail = await page.screenshot({ type: 'jpeg', quality: 60 }).catch(() => null);
+      // شعار الموقع لرأس صفحة النتائج فقط، لا يدخل في التقرير
+      logo = await fetchLogo(context, await page.evaluate(logoCandidatesInPage).catch(() => []));
     } catch (e) {
       initialError = String(e.message || e).split('\n')[0];
     }
@@ -359,7 +408,7 @@ export async function collectFromUrl(input, onProgress = () => {}) {
     source: 'url',
     target_url: input.url,
     auto_explored: auto,
-    thumbnail,
+    logo,
     discovered_title: (first && first.title) || '',
     steps,
     // في الاستكشاف التلقائي الرابط المعطوب دليل وليس توقفًا للرحلة؛ يتوقف فقط إن فشل فتح الموقع

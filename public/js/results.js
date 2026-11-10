@@ -84,9 +84,15 @@
 
   function renderHead(r) {
     const url = r.collected_evidence && r.collected_evidence.target_url;
-    const thumb = r.meta.has_thumbnail
-      ? h('img', { class: 'thumb', src: `/api/results/${encodeURIComponent(r.id)}/thumb.jpg`, alt: '' })
-      : h('div', { class: 'thumb placeholder' }, ic(r.source === 'url' ? 'globe' : 'clip'));
+    // شعار الموقع، وإن لم يوجد فالحرف الأول من اسمه
+    const initial = h('div', { class: 'logo-box initial' }, String(r.product_name || '?').trim().charAt(0).toUpperCase());
+    let logo = initial;
+    if (r.meta.logo_type) {
+      logo = h('div', { class: 'logo-box' });
+      const img = h('img', { src: `/api/results/${encodeURIComponent(r.id)}/logo`, alt: '' });
+      img.addEventListener('error', () => logo.replaceWith(initial));
+      logo.append(img);
+    }
     return [
       h('div', { class: 'page-head' },
         h('div', {},
@@ -96,13 +102,13 @@
         h('a', { href: '/', class: 'back' }, ic('arrow', 'flip back-ic'), t('r.back')),
       ),
       h('section', { class: 'site-card' },
-        thumb,
+        logo,
         h('div', { class: 'site-info' },
           h('div', { class: 'site-name' }, h('strong', { dir: 'auto' }, r.product_name),
             url ? h('a', { href: url, target: '_blank', rel: 'noopener', class: 'ext-link', 'aria-label': url }, ic('external')) : null),
+          h('div', { class: 'date' }, ic('clock'), h('span', {}, `${t('r.date')}: ${formatDate(r.meta.created_at)}`)),
         ),
         h('div', { class: 'site-meta' },
-          h('div', { class: 'date' }, h('small', { class: 'muted' }, t('r.date')), h('span', {}, formatDate(r.meta.created_at))),
           h('a', { class: 'btn primary', href: `/api/results/${encodeURIComponent(r.id)}/report.pdf` }, ic('download'), t('r.pdf')),
         ),
       ),
