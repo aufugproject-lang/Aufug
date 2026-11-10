@@ -1,61 +1,59 @@
 // ملخص تنفيذي نصي يُبنى من بيانات النتيجة فقط (بدون نموذج)، ويُعرض في الواجهة والتقرير.
+import { CATEGORIES, CATEGORY_LABELS, SEVERITY_RANK } from './standards.js';
 
 export function counts(findings) {
-  const c = { high: 0, medium: 0, low: 0 };
-  for (const f of findings) c[f.severity]++;
+  const c = { critical: 0, high: 0, medium: 0, low: 0 };
+  for (const f of findings) if (c[f.severity] != null) c[f.severity]++;
   return c;
 }
 
 export function byCriterion(findings) {
   const out = {};
-  const rank = { high: 3, medium: 2, low: 1 };
   for (const f of findings) {
-    const e = (out[f.criterion] ||= { count: 0, worst: 'low' });
+    const k = f.category || f.criterion;
+    const e = (out[k] ||= { count: 0, worst: 'low' });
     e.count++;
-    if (rank[f.severity] > rank[e.worst]) e.worst = f.severity;
+    if ((SEVERITY_RANK[f.severity] || 0) > (SEVERITY_RANK[e.worst] || 0)) e.worst = f.severity;
   }
   return out;
 }
 
 export function topRecommendations(findings, n = 3) {
-  const order = { high: 0, medium: 1, low: 2 };
+  const conf = { high: 0, medium: 1, low: 2 };
   const seen = new Set();
   return [...findings]
     .filter((f) => f.recommendation)
-    .sort((a, b) => order[a.severity] - order[b.severity] || order[a.confidence] - order[b.confidence] || a.step - b.step)
+    .sort((a, b) => (SEVERITY_RANK[b.severity] || 0) - (SEVERITY_RANK[a.severity] || 0) || conf[a.confidence] - conf[b.confidence] || a.step - b.step)
     .filter((f) => (seen.has(f.recommendation) ? false : seen.add(f.recommendation)))
     .slice(0, n);
+}
+
+function categoryLine(r, lang) {
+  const cs = r.category_scores || {};
+  const labels = CATEGORY_LABELS[lang];
+  const parts = CATEGORIES.filter((c) => cs[c] && cs[c].score != null).map((c) => `${labels[c]} ${cs[c].score}`);
+  const missing = CATEGORIES.filter((c) => cs[c] && cs[c].score == null).map((c) => labels[c]);
+  if (lang === 'en')
+    return `${parts.length ? `Category scores: ${parts.join(', ')}.` : ''}${missing.length ? ` Not assessed (no evidence): ${missing.join(', ')}.` : ''}`;
+  return `${parts.length ? `درجات الفئات: ${parts.join('، ')}.` : ''}${missing.length ? ` لم تُقيّم لعدم توفر الدليل: ${missing.join('، ')}.` : ''}`;
 }
 
 export function executiveSummary(r, lang) {
   const c = counts(r.findings);
   const total = r.findings.length;
-  const miss = r.missing_analytics_events.length;
-  const auto = r.meta.auto_explored;
+  const overall = r.overall_score_out_of_100;
+  const worst = [...CATEGORIES].filter((k) => r.category_scores && r.category_scores[k] && r.category_scores[k].score != null).sort((a, b) => r.category_scores[a].score - r.category_scores[b].score)[0];
+  const labels = CATEGORY_LABELS[lang === 'en' ? 'en' : 'ar'];
   if (lang === 'en') {
-    const how = r.source === 'url' ? (auto ? 'by automatically exploring the site' : 'by running the written journey in a real browser') : 'from the attached evidence files';
-    const done =
-      r.completed === true
-        ? 'The journey completed.'
-        : r.completed === false
-          ? `The journey did not complete${r.stopped_at_step != null ? ` and stopped at step ${r.stopped_at_step}` : ''}.`
-          : 'Journey completion could not be judged from the evidence.';
-    const f = total
-      ? `${total} evidence-based finding${total > 1 ? 's were' : ' was'} recorded: ${c.high} high, ${c.medium} medium and ${c.low} low severity.`
+    const s1 = `“${r.product_name}” scored ${overall != null ? `${overall}/100` : 'no overall score'} against WCAG 2.2 AA, Nielsen’s heuristics, Core Web Vitals, data-visualization, responsive, security and SEO standards.`;
+    const s2 = total
+      ? `${total} evidence-based findings were recorded: ${c.critical} critical, ${c.high} high, ${c.medium} medium and ${c.low} low.`
       : 'No evidence-based findings were recorded.';
-    const s = r.score_out_of_5 != null ? ` The score is ${r.score_out_of_5} out of 5.` : '';
-    const m = miss ? ` ${miss} expected analytics event${miss > 1 ? 's are' : ' is'} missing.` : '';
-    return `“${r.product_name}” was reviewed on the “${r.journey}” journey ${how}. ${done} ${f}${s}${m}`;
+    const s3 = worst ? `The weakest area is ${labels[worst]} (${r.category_scores[worst].score}/100).` : '';
+    return [s1, s2, s3, categoryLine(r, 'en')].filter(Boolean).join(' ');
   }
-  const how = r.source === 'url' ? (auto ? 'باستكشاف الموقع تلقائيًا' : 'بتنفيذ الرحلة المكتوبة في متصفح حقيقي') : 'من ملفات الدليل المرفقة';
-  const done =
-    r.completed === true
-      ? 'اكتملت الرحلة.'
-      : r.completed === false
-        ? `لم تكتمل الرحلة${r.stopped_at_step != null ? ` وتوقفت عند الخطوة ${r.stopped_at_step}` : ''}.`
-        : 'لم يكفِ الدليل للحكم على اكتمال الرحلة.';
-  const f = total ? `سُجلت ${total} ملاحظة مبنية على الدليل: ${c.high} عالية، و${c.medium} متوسطة، و${c.low} منخفضة.` : 'لم تُسجل ملاحظات مبنية على الدليل.';
-  const s = r.score_out_of_5 != null ? ` الدرجة ${r.score_out_of_5} من 5.` : '';
-  const m = miss ? ` هناك ${miss} من أحداث التحليلات المتوقعة غير موجودة.` : '';
-  return `رُوجع «${r.product_name}» على رحلة «${r.journey}» ${how}. ${done} ${f}${s}${m}`;
+  const s1 = `حصل «${r.product_name}» على ${overall != null ? `${overall} من 100` : 'درجة كلية غير محسوبة'} مقابل معايير WCAG 2.2 AA واستدلالات نيلسن و Core Web Vitals وتصوير البيانات والتصميم المتجاوب والأمان و SEO.`;
+  const s2 = total ? `سُجلت ${total} ملاحظة مبنية على الدليل: ${c.critical} حرجة، و${c.high} عالية، و${c.medium} متوسطة، و${c.low} منخفضة.` : 'لم تُسجل ملاحظات مبنية على الدليل.';
+  const s3 = worst ? `أضعف جانب هو ${labels[worst]} (${r.category_scores[worst].score} من 100).` : '';
+  return [s1, s2, s3, categoryLine(r, 'ar')].filter(Boolean).join(' ');
 }

@@ -2,6 +2,9 @@ import { chromium } from 'playwright';
 import { config } from '../config.js';
 import { parseAction, runAction } from './actions.js';
 import { t } from '../i18n.js';
+import { pageAudit, keyboardAudit, perfAudit, responsiveAudit, securityAudit, urlKey } from './audit.js';
+
+const MAX_AUDIT_PAGES = Number(process.env.MAX_AUDIT_PAGES || 8);
 
 const SKIP_TYPES = new Set(['image', 'font', 'stylesheet', 'media']);
 const MAX_TEXT = 4000;
@@ -179,7 +182,7 @@ export async function collectFromUrl(input, onProgress = () => {}) {
 
   let context;
   try {
-    context = await browser.newContext({ locale: 'ar', viewport: { width: 1366, height: 900 }, ignoreHTTPSErrors: true });
+    context = await browser.newContext({ locale: 'ar', viewport: { width: 1366, height: 900 }, ignoreHTTPSErrors: true, bypassCSP: true });
   } catch (e) {
     await browser.close().catch(() => {});
     throw e;
@@ -262,11 +265,33 @@ export async function collectFromUrl(input, onProgress = () => {}) {
     }
   };
 
+  // نتائج التدقيق القائم على المعايير
+  const audit = { pages: [], keyboard: null, performance: null, responsive: null, security: null, errors: [] };
+  const audited = new Set();
+  let mainResponse = null;
+  const guard = async (part, fn) => {
+    try {
+      return await fn();
+    } catch (e) {
+      audit.errors.push({ part, error: String(e.message || e).split('\n')[0] });
+      return null;
+    }
+  };
+  // تدقيق WCAG وSEO والرسوم لكل صفحة جديدة تُفتح أثناء الرحلة
+  async function auditPage(stepNo) {
+    const key = urlKey(page.url());
+    if (!key || audited.has(key) || audit.pages.length >= MAX_AUDIT_PAGES) return;
+    audited.add(key);
+    onProgress(t(lang, 'progress.audit_page', { n: audit.pages.length + 1 }));
+    const res = await guard('page', () => pageAudit(page));
+    if (res) audit.pages.push({ step: stepNo, ...res });
+  }
+
   try {
     onProgress(t(lang, 'progress.open'));
     let initialError = null;
     try {
-      await page.goto(input.url, { waitUntil: 'domcontentloaded', timeout: timeout * 3 });
+      mainResponse = await page.goto(input.url, { waitUntil: 'domcontentloaded', timeout: timeout * 3 });
       await settle();
       // شعار الموقع لرأس صفحة النتائج فقط، لا يدخل في التقرير
       logo = await fetchLogo(context, await page.evaluate(logoCandidatesInPage).catch(() => []));
@@ -282,6 +307,16 @@ export async function collectFromUrl(input, onProgress = () => {}) {
       page: await snapshot(),
     });
     if (initialError) stoppedAt = 0;
+    if (!initialError) {
+      await auditPage(0);
+      // اختبار لوحة المفاتيح على الصفحة الأولى، ثم إعادة تحميلها لتبدأ الرحلة من حالة نظيفة
+      onProgress(t(lang, 'progress.keyboard'));
+      current = -1;
+      audit.keyboard = await guard('keyboard', () => keyboardAudit(page));
+      await page.goto(input.url, { waitUntil: 'domcontentloaded', timeout: timeout * 3 }).catch(() => {});
+      await settle();
+      current = 0;
+    }
 
     const autoMode = input.steps.length === 0;
     if (autoMode && !initialError) await autoExplore();
@@ -311,8 +346,18 @@ export async function collectFromUrl(input, onProgress = () => {}) {
       }
       await settle();
       record.page = await snapshot();
+      if (record.status === 'done') await auditPage(step.number);
       steps.push(record);
       if (record.status === 'failed') stoppedAt = step.number;
+    }
+
+    if (!initialError) {
+      onProgress(t(lang, 'progress.security'));
+      audit.security = await guard('security', () => securityAudit(context, mainResponse, input.url));
+      onProgress(t(lang, 'progress.perf'));
+      audit.performance = await guard('performance', () => perfAudit(browser, input.url));
+      onProgress(t(lang, 'progress.responsive'));
+      audit.responsive = await guard('responsive', () => responsiveAudit(browser, input.url));
     }
   } finally {
     await browser.close().catch(() => {});
@@ -338,6 +383,7 @@ export async function collectFromUrl(input, onProgress = () => {}) {
       }
       await settle();
       rec.page = await snapshot();
+      if (rec.status === 'done') await auditPage(n);
       steps.push(rec);
       return rec;
     };
@@ -414,5 +460,6 @@ export async function collectFromUrl(input, onProgress = () => {}) {
     // في الاستكشاف التلقائي الرابط المعطوب دليل وليس توقفًا للرحلة؛ يتوقف فقط إن فشل فتح الموقع
     all_steps_executed: stoppedAt === null,
     stopped_at_step: stoppedAt,
+    audit,
   };
 }

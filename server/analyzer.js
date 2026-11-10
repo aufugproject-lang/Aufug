@@ -1,30 +1,34 @@
 import fs from 'node:fs/promises';
 import Anthropic from '@anthropic-ai/sdk';
-import { config, modelConfigured, CRITERIA, SEVERITIES, CONFIDENCES } from './config.js';
+import { config, modelConfigured, CONFIDENCES } from './config.js';
+import { CATEGORIES, SEVERITIES, EFFORTS, SEVERITY_RANK, CATEGORY_STANDARDS, CHECKLIST, categoryScore, performanceScore, priorityValue, rateMetric } from './standards.js';
 import { checkAnalytics, deterministicAnalytics } from './analytics.js';
 import { ruleFindings } from './rules.js';
 import { t } from './i18n.js';
 import { executiveSummary } from './summary.js';
 
-const SEVERITY_WEIGHT = { high: 1.5, medium: 0.75, low: 0.25 };
-
-const systemPrompt = (lang) => `أنت محلل جودة منتجات رقمية وتجربة عميل. تراجع رحلة مستخدم واحدة لتطبيق ويب في بيئة اختبار.
+const systemPrompt = (lang) => `أنت مدقق جودة ويب أول، خبير في إمكانية الوصول وأبحاث تجربة المستخدم والأداء وتصوير البيانات. تدقق موقعًا واحدًا فتحه متصفح آلي، مقابل هذه المعايير:
+1. accessibility: WCAG 2.2 المستوى AA (لوحة المفاتيح، ظهور التركيز، التباين، دعم قارئات الشاشة للرسوم والجداول، ARIA، تسميات النماذج).
+2. usability: استدلالات نيلسن العشرة و ISO 9241-11 (الفعالية، الكفاءة، الرضا) للمهام الرئيسية.
+3. performance: Core Web Vitals (LCP ≤ 2.5s، INP ≤ 200ms، CLS ≤ 0.1)، حجم الصفحة، الموارد المعطِّلة، الصور، التخزين المؤقت، تحميل البيانات الكبيرة.
+4. data_visualization: وضوح الرسوم، ملاءمة نوع الرسم للبيانات، التسميات، ألوان آمنة لعمى الألوان، عدم تضليل المقاييس، بدائل نصية أو جدولية.
+5. responsive: السلوك على الجوال واللوحي وسطح المكتب.
+6. security_privacy: HTTPS، موافقة ملفات الارتباط، مشكلات OWASP Top 10 الظاهرة من الواجهة، التعامل مع البيانات الحساسة.
+7. seo_content: HTML دلالي، بنية العناوين، وسوم meta، وضوح النصوص.
 
 قواعد ملزمة:
-- راجع الدليل المجموع المرفق فقط. لا تعتمد على معرفة عامة عن مواقع أو منتجات مشابهة، ولا تفترض سلوكًا لم يظهر في الدليل.
-- كل ملاحظة يجب أن تستند إلى دليل محدد: اقتبس أو صف بدقة ما ظهر (نص، زر، رسالة خطأ، طلب شبكة، محتوى ملف)، واذكر مصدره في evidence_source بالقيمة الحرفية من قائمة المصادر المسموحة.
-- step هو رقم الخطوة كما ورد في خطوات الرحلة (0 = الصفحة الأولى أو دليل عام لا يخص خطوة محددة).
-- المعايير المسموحة فقط: UX، CX، navigation، accessibility، feature_completeness، friction، analytics.
-- الشدة: high إذا كانت الرحلة لا تكتمل أو بيانات العميل تضيع. medium إذا يكمل المستخدم بصعوبة واضحة. low إذا كان الإزعاج لا يوقف المهمة.
-- confidence: high فقط إذا كان الدليل مباشرًا وصريحًا. medium إذا احتاج استنتاجًا بسيطًا. low إذا كان الدليل جزئيًا.
-- إذا كان الدليل غير كافٍ للحكم على أمر ما (مثل ميزة متوقعة لم يظهر عنها أي شيء، أو صورة غير واضحة) فاكتب بندًا في insufficient_evidence ولا تخمّن ولا تنشئ ملاحظة.
-- لا تكرر الملاحظة نفسها بصياغات مختلفة. ادمج ما يخص المشكلة نفسها في ملاحظة واحدة.
-- قارن الميزات والقصص المتوقعة بما ظهر في الدليل؛ الميزة الغائبة بدليل واضح تُسجل تحت feature_completeness، وغير المؤكدة تذهب إلى insufficient_evidence.
-- أحداث التحليلات: فحص آلي مرفق يبين أي الأحداث ظهرت في الدليل. لا تعدّ حدثًا ظهر في الدليل حدثًا ناقصًا. اكتب في missing_analytics_events فقط الأحداث المتوقعة غير الظاهرة، مع متى يجب أن تُطلق ولماذا تُعد ناقصة بناءً على الدليل.
-- التوصية مقترح عملي قصير يخضع لمراجعة بشرية.
+- فكّر في كل فئة خطوة بخطوة قبل أي استنتاج.
+- اعتمد على الدليل المجموع المرفق فقط (لقطات الصفحات، نتائج axe، قياسات الأداء، الترويسات، الرسوم). لا تفترض سلوكًا لم يظهر، ولا تعتمد على معرفة عامة عن مواقع مشابهة.
+- كل ملاحظة: category من القائمة أعلاه، و standard يذكر المعيار المخالف بدقة (مثل "WCAG 2.2 SC 1.4.3 Contrast (Minimum) (AA)" أو "Nielsen heuristic #9" أو "Core Web Vitals — LCP ≤ 2.5 s" أو "OWASP A05:2021")، و where يحدد المكان (رابط الصفحة أو محدد العنصر)، و evidence يقتبس الدليل، و evidence_source بالقيمة الحرفية من المصادر المسموحة، و recommendation إصلاح عملي، و code مثال كود عند الحاجة أو نص فارغ، و effort تقدير الجهد (low أقل من يوم، medium أيام، high أكثر).
+- الشدة: critical إذا منعت إكمال مهمة رئيسية أو كشفت بيانات حساسة أو خالفت معيارًا قانونيًا صريحًا. high إذا أعاقت المهمة بشدة أو استبعدت فئة من المستخدمين. medium إذا أكمل المستخدم بصعوبة واضحة. low إذا كان الإزعاج لا يوقف المهمة.
+- confidence: high فقط إذا كان الدليل مباشرًا وصريحًا. medium إذا احتاج استنتاجًا بسيطًا. low إذا كان جزئيًا.
+- ما لا يمكن التحقق منه من الدليل اكتبه في insufficient_evidence مع طريقة اختباره يدويًا (الأداة والخطوات)، ولا تخمّن.
+- لا تكرر الملاحظة نفسها، ولا تكرر ملاحظات القواعد الآلية المرفقة؛ أضف ما لا تغطيه، خصوصًا استدلالات نيلسن ووضوح النصوص وملاءمة الرسوم.
+- أحداث التحليلات: لا تعدّ حدثًا ظهر في الدليل ناقصًا.
+- التوصية مقترح يخضع لمراجعة بشرية.
 - ${t(lang, 'model.language')}
 - success_condition_met: yes إذا أظهر الدليل تحقق شرط النجاح، no إذا أظهر عدم تحققه، unknown إذا لم يكفِ الدليل.
-- journey_state: completed أو stopped أو unknown، و stopped_at_step رقم الخطوة التي توقفت عندها الرحلة أو -1 إذا لم تتوقف أو لم يُعرف.`;
+- journey_state: completed أو stopped أو unknown، و stopped_at_step رقم الخطوة التي توقفت عندها الرحلة أو -1.`;
 
 const OUTPUT_SCHEMA = {
   type: 'object',
@@ -40,15 +44,20 @@ const OUTPUT_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['criterion', 'severity', 'step', 'evidence_source', 'evidence', 'impact', 'recommendation', 'confidence'],
+        required: ['category', 'title', 'standard', 'severity', 'step', 'evidence_source', 'evidence', 'where', 'impact', 'recommendation', 'code', 'effort', 'confidence'],
         properties: {
-          criterion: { type: 'string', enum: CRITERIA },
+          category: { type: 'string', enum: CATEGORIES },
+          title: { type: 'string' },
+          standard: { type: 'string' },
           severity: { type: 'string', enum: SEVERITIES },
           step: { type: 'integer' },
           evidence_source: { type: 'string' },
           evidence: { type: 'string' },
+          where: { type: 'string' },
           impact: { type: 'string' },
           recommendation: { type: 'string' },
+          code: { type: 'string' },
+          effort: { type: 'string', enum: EFFORTS },
           confidence: { type: 'string', enum: CONFIDENCES },
         },
       },
@@ -93,6 +102,7 @@ function evidenceForModel(collected) {
         console_errors: s.console_errors,
         tracking_calls: s.tracking_calls,
       })),
+      audit: compactAudit(collected.audit),
     };
   }
   return {
@@ -129,13 +139,45 @@ function buildUserContent(input, collected, analyticsChecks, priorFindings = [])
     {
       type: 'text',
       text: `ملاحظات سجلتها القواعد الآلية مسبقًا وستُعرض كما هي. لا تكررها ولا تعِد صياغتها؛ أضف فقط ما لا تغطيه:\n${JSON.stringify(
-        priorFindings.map(({ criterion, step, evidence_source, evidence }) => ({ criterion, step, evidence_source, evidence })),
+        priorFindings.map(({ category, standard, step, where, evidence }) => ({ category, standard, step, where, evidence })),
         null,
         1,
       )}`,
     },
   ];
   return content;
+}
+
+// نسخة مختصرة من التدقيق للنموذج (بدون القوائم الطويلة)
+function compactAudit(a) {
+  if (!a) return null;
+  const perf = a.performance;
+  return {
+    pages: a.pages.map((p) => ({
+      evidence_source: `step:${p.step}`,
+      url: p.url,
+      axe_violations: p.axe ? p.axe.violations.map((v) => ({ id: v.id, impact: v.impact, count: v.count, wcag: v.tags.filter((x) => /^wcag\d{3,}/.test(x)), targets: v.nodes.map((n) => n.target) })) : null,
+      seo: p.seo,
+      charts: p.charts,
+      tables: p.tables,
+      dom_nodes: p.dom_nodes,
+      libs: p.libs,
+      consent_banner: p.consent_banner,
+    })),
+    keyboard: a.keyboard,
+    performance: perf
+      ? {
+          conditions: perf.conditions,
+          metrics: perf.metrics,
+          requests: perf.resources.length,
+          total_kb: Math.round(perf.resources.reduce((x, r) => x + (r.bytes || 0), 0) / 1024),
+          largest: [...perf.resources].sort((x, y) => (y.bytes || 0) - (x.bytes || 0)).slice(0, 12).map((r) => ({ url: r.url.slice(0, 120), type: r.type, kb: Math.round((r.bytes || 0) / 1024), cache: r.headers && r.headers['cache-control'], encoding: r.headers && r.headers['content-encoding'] })),
+        }
+      : null,
+    responsive: a.responsive,
+    security: a.security ? { https: a.security.https, http_redirects_to_https: a.security.http_redirects_to_https, headers: a.security.headers, cookies: a.security.cookies } : null,
+    errors: a.errors,
+  };
 }
 
 async function imageBlocks(collected) {
@@ -174,54 +216,73 @@ function norm(s) {
   return String(s || '').replace(/[\s\p{P}]+/gu, ' ').trim().toLowerCase();
 }
 
+// فئات قديمة (نتائج سابقة وبيانات التجربة) تُحوَّل إلى فئات المعايير الجديدة
+const LEGACY = { UX: 'usability', CX: 'usability', navigation: 'usability', friction: 'usability', feature_completeness: 'usability', analytics: 'usability', accessibility: 'accessibility' };
+
 export function validateFindings(raw, collected, input) {
   const sources = new Set(allowedSources(collected));
   const maxStep = input.steps.length;
   const kept = [];
   const rejected = [];
   const seen = new Set();
-  for (const f of raw || []) {
+  for (const f0 of raw || []) {
+    const f = { ...f0, category: CATEGORIES.includes(f0.category) ? f0.category : LEGACY[f0.category || f0.criterion] };
     const problems = [];
-    if (!CRITERIA.includes(f.criterion)) problems.push(t(input.lang, 'rej.criterion'));
+    if (!f.category) problems.push(t(input.lang, 'rej.criterion'));
     if (!SEVERITIES.includes(f.severity)) problems.push(t(input.lang, 'rej.severity'));
     if (!CONFIDENCES.includes(f.confidence)) problems.push(t(input.lang, 'rej.confidence'));
     if (!Number.isInteger(f.step) || f.step < 0 || f.step > maxStep) problems.push(t(input.lang, 'rej.step'));
     if (!sources.has(f.evidence_source)) problems.push(t(input.lang, 'rej.source'));
     if (!String(f.evidence || '').trim()) problems.push(t(input.lang, 'rej.evidence'));
+    if (!String(f.standard || '').trim()) problems.push(t(input.lang, 'rej.standard'));
     if (problems.length) {
       rejected.push(t(input.lang, 'ins.rejected', { problems: problems.join(t(input.lang, 'list.sep')), text: String(f.impact || f.evidence || '').slice(0, 200) }));
       continue;
     }
-    const key = `${f.criterion}|${f.step}|${norm(f.evidence).slice(0, 120)}`;
-    const key2 = `${f.criterion}|${f.step}|${norm(f.impact).slice(0, 120)}`;
+    const key = `${f.category}|${f.step}|${norm(f.evidence).slice(0, 120)}`;
+    const key2 = `${f.category}|${f.step}|${norm(f.impact).slice(0, 120)}`;
     if (seen.has(key) || seen.has(key2)) continue;
     seen.add(key);
     seen.add(key2);
     kept.push({
       journey: input.journey,
-      criterion: f.criterion,
+      category: f.category,
+      criterion: f.category,
+      title: String(f.title || '').trim(),
+      standard: String(f.standard).trim(),
       severity: f.severity,
       step: f.step,
       evidence: String(f.evidence).trim(),
       evidence_source: f.evidence_source,
+      where: String(f.where || '').trim(),
       impact: String(f.impact || '').trim(),
       recommendation: String(f.recommendation || '').trim(),
+      code: String(f.code || ''),
+      effort: EFFORTS.includes(f.effort) ? f.effort : 'medium',
       recommendation_status: 'pending_human_review',
       confidence: f.confidence,
     });
   }
-  const order = { high: 0, medium: 1, low: 2 };
-  kept.sort((a, b) => order[a.severity] - order[b.severity] || a.step - b.step);
   return { findings: kept, rejected };
 }
 
-// الدرجة من 5 تُحسب من الملاحظات عالية الثقة وذات الدليل فقط
-export function computeScore(findings, lang = 'ar') {
-  const counted = findings.filter((f) => f.confidence === 'high' && f.evidence);
-  const penalty = counted.reduce((sum, f) => sum + SEVERITY_WEIGHT[f.severity], 0);
+// الدرجات: الأداء من مقاييس Core Web Vitals، وباقي الفئات 100 ناقص خصم الملاحظات عالية الثقة؛
+// الفئة التي لم يتوفر لها دليل "غير مُقيّمة" ولا تدخل في الدرجة الكلية
+export function computeScores(findings, assessed, metrics, lang = 'ar') {
+  const categories = {};
+  for (const c of CATEGORIES) {
+    const list = findings.filter((f) => f.category === c);
+    const isAssessed = assessed.has(c) || list.length > 0;
+    let score = null;
+    if (isAssessed) score = c === 'performance' && metrics ? performanceScore(metrics) ?? categoryScore(list) : categoryScore(list);
+    categories[c] = { score, assessed: isAssessed, findings: list.length, standard: CATEGORY_STANDARDS[c] };
+  }
+  const scored = Object.values(categories).filter((x) => x.score != null);
+  const overall = scored.length ? Math.round(scored.reduce((s, x) => s + x.score, 0) / scored.length) : null;
   return {
-    score: Math.round(Math.max(0, 5 - penalty) * 10) / 10,
-    counted_findings: counted.length,
+    overall,
+    categories,
+    counted_findings: findings.filter((f) => f.confidence === 'high').length,
     method: t(lang, 'score.method'),
   };
 }
@@ -238,7 +299,7 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
   const warnings = collectWarnings(collected, input.lang);
 
   // القواعد الآلية تعمل دائمًا (ما عدا بيانات التجربة المسجلة) ولا تحتاج نموذجًا
-  const rules = recordedAnalysis ? { findings: [], insufficient: [] } : ruleFindings(input, collected);
+  const rules = recordedAnalysis ? { findings: [], insufficient: [], assessed: new Set(['usability']) } : ruleFindings(input, collected, { modelUsed: modelConfigured() });
   const L = input.lang;
   const RULES_NOTICE = t(L, 'notice.rules');
 
@@ -336,10 +397,15 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
       if (f.kind === 'image') insufficient.push(t(L, 'ins.image_model', { file: f.file }));
   }
 
-  const order = { high: 0, medium: 1, low: 2 };
-  findings.sort((a, b) => order[a.severity] - order[b.severity] || a.step - b.step);
-  scoring = computeScore(findings, L);
-  score = scoring.score;
+  findings.sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity] || a.step - b.step);
+  const perf = collected.audit && collected.audit.performance;
+  scoring = computeScores(findings, rules.assessed, perf ? perf.metrics : null, L);
+  score = scoring.overall;
+  // أهم 10 إصلاحات (الأثر مقابل الجهد)، والإصلاحات السريعة (أقل من يوم)
+  const ranked = findings.map((f, i) => ({ i, v: priorityValue(f), f })).sort((a, b) => b.v - a.v || SEVERITY_RANK[b.f.severity] - SEVERITY_RANK[a.f.severity]);
+  const priorities = ranked.slice(0, 10).map((x) => x.i);
+  const quickWins = ranked.filter((x) => x.f.effort === 'low' && x.f.severity !== 'low').slice(0, 10).map((x) => x.i);
+  const metrics = perf ? summarizeMetrics(perf) : null;
 
   const result = {
     product_name: input.product_name,
@@ -347,8 +413,14 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
     source: collected.source,
     completed,
     stopped_at_step: completed ? null : stoppedAt,
-    score_out_of_5: score,
+    overall_score_out_of_100: score,
+    score_out_of_5: score == null ? null : Math.round((score / 20) * 10) / 10,
+    category_scores: scoring.categories,
     findings,
+    priorities,
+    quick_wins: quickWins,
+    metrics,
+    checklist: CHECKLIST[L === 'en' ? 'en' : 'ar'],
     missing_analytics_events: missing,
     insufficient_evidence: uniq(insufficient),
     meta: {
@@ -371,6 +443,24 @@ export async function analyze(input, collected, { recordedAnalysis = null, onPro
   };
   result.meta.executive_summary = executiveSummary(result, L);
   return result;
+}
+
+function summarizeMetrics(perf) {
+  const m = perf.metrics;
+  const res = perf.resources;
+  const sum = (pred) => Math.round(res.filter(pred).reduce((s, r) => s + (r.bytes || 0), 0) / 1024);
+  const out = { conditions: perf.conditions, url: perf.url };
+  for (const k of ['lcp', 'cls', 'tbt', 'fcp', 'ttfb']) out[k] = { value: m[k], rating: rateMetric(k, m[k]) };
+  out.inp = { value: null, rating: null, note: 'field-only' };
+  out.total_kb = sum(() => true);
+  out.js_kb = sum((r) => r.type === 'Script');
+  out.css_kb = sum((r) => r.type === 'Stylesheet');
+  out.img_kb = sum((r) => r.type === 'Image');
+  out.font_kb = sum((r) => r.type === 'Font');
+  out.requests = res.length;
+  out.render_blocking = (m.render_blocking || []).length;
+  out.lcp_element = m.lcp_element;
+  return out;
 }
 
 function collectWarnings(collected, lang) {

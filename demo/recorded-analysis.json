@@ -6,80 +6,127 @@
   "stopped_at_step": 5,
   "findings": [
     {
-      "criterion": "friction",
       "severity": "high",
       "step": 5,
       "evidence_source": "file:network.har",
       "evidence": "طلبان POST إلى /api/orders أعادا الحالة 500 مع الرد {\"error\":\"PAYMENT_GATEWAY_TIMEOUT\"}، ولا يوجد بعدهما أي طلب لصفحة تأكيد.",
       "impact": "لا يستطيع العميل إتمام الطلب، فتتوقف الرحلة عند تأكيد الطلب ويضيع البيع.",
       "recommendation": "معالجة مهلة بوابة الدفع في بيئة الاختبار، وإظهار حالة واضحة للعميل عند فشل الدفع مع خيار دفع بديل.",
-      "confidence": "high"
+      "confidence": "high",
+      "category": "usability",
+      "title": "فشل تأكيد الطلب بسبب مهلة بوابة الدفع",
+      "standard": "ISO 9241-11:2018 — Effectiveness · Nielsen heuristic #9: Help users recognize, diagnose, and recover from errors",
+      "where": "POST /api/orders",
+      "effort": "medium",
+      "code": ""
     },
     {
-      "criterion": "CX",
       "severity": "high",
       "step": 5,
       "evidence_source": "file:session-notes.md",
       "evidence": "ملاحظة المختبر: «بعد إعادة تحميل الصفحة للمحاولة مجددًا، كانت حقول عنوان الشحن فارغة واضطررت لإدخال العنوان ورقم الجوال من جديد».",
       "impact": "بيانات العميل المدخلة تضيع بعد الخطأ، ما يرفع احتمال التخلي عن الطلب.",
       "recommendation": "حفظ بيانات العنوان في الجلسة واسترجاعها تلقائيًا بعد فشل تأكيد الطلب.",
-      "confidence": "medium"
+      "confidence": "medium",
+      "category": "usability",
+      "title": "بيانات العنوان تضيع بعد الخطأ",
+      "standard": "Nielsen heuristic #5: Error prevention · WCAG 2.2 SC 3.3.7 Redundant Entry (A)",
+      "where": "checkout — shipping address form",
+      "effort": "medium",
+      "code": "sessionStorage.setItem('checkout.address', JSON.stringify(address));"
     },
     {
-      "criterion": "UX",
       "severity": "medium",
       "step": 5,
       "evidence_source": "file:checkout.html",
       "evidence": "رسالة الخطأ الظاهرة في الصفحة هي «حدث خطأ، حاول مرة أخرى» فقط، بلا سبب ولا خطوة تالية.",
       "impact": "العميل لا يعرف هل خُصم المبلغ أم لا، ولا ما يجب فعله، فيكرر المحاولة بصعوبة.",
       "recommendation": "استبدال الرسالة العامة برسالة تذكر أن الدفع لم يتم وأن المبلغ لم يُخصم، مع زر لإعادة المحاولة أو تغيير طريقة الدفع.",
-      "confidence": "high"
+      "confidence": "high",
+      "category": "usability",
+      "title": "رسالة خطأ عامة بلا سبب أو خطوة تالية",
+      "standard": "Nielsen heuristic #9: Help users recognize, diagnose, and recover from errors · WCAG 2.2 SC 3.3.3 Error Suggestion (AA)",
+      "where": "checkout.html — div.alert-danger[role=alert]",
+      "effort": "low",
+      "code": "<div role=\"alert\">Payment did not go through and you were not charged. <button>Try again</button> <button>Use another method</button></div>"
     },
     {
-      "criterion": "accessibility",
       "severity": "medium",
       "step": 4,
       "evidence_source": "file:checkout.html",
       "evidence": "الحقلان phone و postal_code في نموذج عنوان الشحن بلا عنصر label ولا aria-label، ويعتمدان على placeholder فقط. زر الإغلاق icon-close بلا اسم نصي.",
       "impact": "مستخدم قارئ الشاشة لا يعرف غرض الحقلين، فيكمل تعبئة العنوان بصعوبة.",
       "recommendation": "إضافة تسميات label مرتبطة بالحقلين phone و postal_code، وإضافة aria-label لزر الإغلاق.",
-      "confidence": "high"
+      "confidence": "high",
+      "category": "accessibility",
+      "title": "حقول بلا تسمية وزر بلا اسم",
+      "standard": "WCAG 2.2 SC 1.3.1 Info and Relationships (A) · WCAG 2.2 SC 4.1.2 Name, Role, Value (A)",
+      "where": "checkout.html — input[name=phone], input[name=postal_code], button.icon-close",
+      "effort": "low",
+      "code": "<label for=\"phone\">Mobile</label>\n<input id=\"phone\" name=\"phone\" type=\"tel\" autocomplete=\"tel\">\n<button class=\"icon-close\" aria-label=\"Close\">…</button>"
     },
     {
-      "criterion": "feature_completeness",
       "severity": "medium",
       "step": 4,
       "evidence_source": "file:checkout.html",
       "evidence": "ملخص الطلب يعرض «رسوم الشحن: تُحسب عند الدفع» و«الإجمالي: 45 ر.س + الشحن»، بينما الميزة المتوقعة هي عرض تكلفة الشحن قبل الدفع.",
       "impact": "العميل لا يرى الإجمالي النهائي قبل الدفع، ما يضعف الثقة ويزيد التردد.",
       "recommendation": "حساب رسوم الشحن بعد اختيار المدينة وعرض الإجمالي النهائي قبل زر «تأكيد الطلب».",
-      "confidence": "high"
+      "confidence": "high",
+      "category": "usability",
+      "title": "تكلفة الشحن لا تظهر قبل الدفع",
+      "standard": "Nielsen heuristic #1: Visibility of system status · ISO 9241-11:2018 — Effectiveness",
+      "where": "checkout.html — #summary",
+      "effort": "medium",
+      "code": ""
     },
     {
-      "criterion": "feature_completeness",
       "severity": "low",
       "step": 5,
       "evidence_source": "file:checkout.html",
       "evidence": "صفحة إتمام الطلب لا تحتوي أي حقل أو زر أو نص خاص بكود الخصم.",
       "impact": "العميل الذي يملك كود خصم لا يستطيع استخدامه، لكنه يستطيع إتمام الشراء بالسعر الكامل.",
       "recommendation": "إضافة حقل «كود الخصم» في قسم ملخص الطلب قبل الدفع.",
-      "confidence": "high"
+      "confidence": "high",
+      "category": "usability",
+      "title": "لا يوجد حقل لكود الخصم",
+      "standard": "ISO 9241-11:2018 — Effectiveness (expected feature missing)",
+      "where": "checkout.html — #summary",
+      "effort": "low",
+      "code": ""
     },
     {
-      "criterion": "navigation",
       "severity": "low",
       "step": 3,
       "evidence_source": "file:session-notes.md",
       "evidence": "ملاحظة المختبر: «زر المتابعة بدون حساب يظهر أسفل نموذج تسجيل الدخول كرابط نصي صغير؛ احتجت قرابة 20 ثانية لإيجاده».",
       "impact": "تأخير في الوصول إلى الشراء كضيف دون أن يوقف المهمة.",
       "recommendation": "إظهار خيار «المتابعة بدون حساب» كزر رئيسي بجانب تسجيل الدخول.",
-      "confidence": "medium"
+      "confidence": "medium",
+      "category": "usability",
+      "title": "خيار الشراء كضيف صعب الإيجاد",
+      "standard": "Nielsen heuristic #6: Recognition rather than recall · ISO 9241-11:2018 — Efficiency",
+      "where": "checkout/login — “continue without an account” link",
+      "effort": "low",
+      "code": "<a class=\"btn btn-primary\" href=\"/checkout?guest=1\">Continue without an account</a>"
     }
   ],
   "missing_analytics_events": [
-    { "event_name": "add_shipping_info", "when": "عند حفظ عنوان الشحن في الخطوة 4", "why": "طلب POST /api/checkout/address نجح بالحالة 200 في network.har، ولم يتبعه أي طلب إلى analytics.nakheel.test/collect يحمل add_shipping_info." },
-    { "event_name": "add_payment_info", "when": "عند اختيار طريقة الدفع في الخطوة 5", "why": "لا يوجد في network.har ولا في dataLayer داخل checkout.html أي إرسال للحدث رغم اختيار طريقة الدفع." },
-    { "event_name": "purchase", "when": "عند ظهور صفحة تأكيد الطلب", "why": "لم تظهر صفحة التأكيد بسبب فشل /api/orders، فلم يُرسل الحدث. يجب التحقق منه مجددًا بعد إصلاح الدفع." }
+    {
+      "event_name": "add_shipping_info",
+      "when": "عند حفظ عنوان الشحن في الخطوة 4",
+      "why": "طلب POST /api/checkout/address نجح بالحالة 200 في network.har، ولم يتبعه أي طلب إلى analytics.nakheel.test/collect يحمل add_shipping_info."
+    },
+    {
+      "event_name": "add_payment_info",
+      "when": "عند اختيار طريقة الدفع في الخطوة 5",
+      "why": "لا يوجد في network.har ولا في dataLayer داخل checkout.html أي إرسال للحدث رغم اختيار طريقة الدفع."
+    },
+    {
+      "event_name": "purchase",
+      "when": "عند ظهور صفحة تأكيد الطلب",
+      "why": "لم تظهر صفحة التأكيد بسبب فشل /api/orders، فلم يُرسل الحدث. يجب التحقق منه مجددًا بعد إصلاح الدفع."
+    }
   ],
   "insufficient_evidence": [
     "لم تُرفق صفحة تأكيد الطلب (الخطوة 6)، فلا يمكن الحكم على محتواها أو على ظهور رقم الطلب فيها.",

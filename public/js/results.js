@@ -2,10 +2,15 @@
   const { t, icon } = window.QR;
   const app = document.getElementById('app');
   const id = new URLSearchParams(location.search).get('id');
-  const TABS = ['summary', 'findings', 'events', 'insufficient', 'evidence'];
+  const TABS = ['summary', 'findings', 'priorities', 'events', 'insufficient', 'checklist', 'evidence'];
+  const CATS = ['accessibility', 'usability', 'performance', 'data_visualization', 'responsive', 'security_privacy', 'seo_content'];
+  const SEVS = ['critical', 'high', 'medium', 'low'];
+  // فئات النتائج القديمة تُعرض ضمن الفئات الجديدة
+  const LEGACY = { UX: 'usability', CX: 'usability', navigation: 'usability', friction: 'usability', feature_completeness: 'usability', analytics: 'usability', accessibility: 'accessibility' };
+  const catOf = (f) => (CATS.includes(f.category) ? f.category : LEGACY[f.category || f.criterion] || 'usability');
   let result = null;
   let activeTab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'summary';
-  const filters = { sev: 'all', crit: 'all' };
+  const filters = { sev: 'all', cat: 'all' };
 
   // بناء عناصر DOM بأمان (بدون innerHTML لنصوص الدليل)
   function h(tag, attrs = {}, ...children) {
@@ -43,7 +48,8 @@
     return s ? s.text : '';
   };
   const sevLabel = (s) => t(`sev.${s}`);
-  const critLabel = (c) => t(`crit.${c}`);
+  const catLabel = (c) => t(`cat.${c}`);
+  const effLabel = (e) => t(`eff.${e || 'medium'}`);
 
   function completion(r) {
     if (r.completed === true && ['evidence_only', 'rules'].includes(r.meta.analysis_mode)) return { text: t('c.ran'), cls: 'unknown' };
@@ -53,22 +59,24 @@
   }
 
   function counts(findings) {
-    const c = { high: 0, medium: 0, low: 0 };
-    findings.forEach((f) => c[f.severity]++);
+    const c = { critical: 0, high: 0, medium: 0, low: 0 };
+    findings.forEach((f) => c[f.severity] != null && c[f.severity]++);
     return c;
   }
+
+  const overallOf = (r) => (r.overall_score_out_of_100 != null ? r.overall_score_out_of_100 : r.score_out_of_5 != null ? Math.round(r.score_out_of_5 * 20) : null);
+  const tone = (score) => (score == null ? 'none' : score >= 90 ? 'good' : score >= 50 ? 'mid' : 'bad');
 
   function ring(score, size = 'md') {
     const r = 42;
     const c = 2 * Math.PI * r;
-    const pct = score == null ? 0 : Math.max(0, Math.min(1, score / 5));
-    const tone = score == null ? 'none' : score >= 4 ? 'good' : score >= 2.5 ? 'mid' : 'bad';
-    return h('div', { class: `ring ring-${tone} ring-${size}` },
+    const pct = score == null ? 0 : Math.max(0, Math.min(1, score / 100));
+    return h('div', { class: `ring ring-${tone(score)} ring-${size}` },
       h('svg', { viewBox: '0 0 100 100', 'aria-hidden': 'true' },
         h('circle', { cx: 50, cy: 50, r, class: 'track' }),
         h('circle', { cx: 50, cy: 50, r, class: 'bar', 'stroke-dasharray': `${c * pct} ${c}` }),
       ),
-      h('div', { class: 'ring-label' }, h('strong', {}, score == null ? '—' : String(score)), h('small', {}, t('of5'))),
+      h('div', { class: 'ring-label' }, h('strong', {}, score == null ? '—' : String(score)), h('small', {}, t('of100'))),
     );
   }
 
@@ -118,29 +126,29 @@
   function renderKpis(r) {
     const c = counts(r.findings);
     const comp = completion(r);
-    const score = r.score_out_of_5;
+    const overall = overallOf(r);
     const miss = r.missing_analytics_events.length;
     const compSub =
       r.stopped_at_step != null ? t('c.stopped', r.stopped_at_step) : r.completed === true ? t('c.all_ok') : !r.meta.success_condition ? t('c.no_condition') : '';
     return h('section', { class: 'kpis' },
+      h('div', { class: 'kpi kpi-score' },
+        ring(overall),
+        h('div', {},
+          h('span', { class: 'kpi-label' }, t('k.overall')),
+          h('div', { class: 'kpi-value', dir: 'ltr' }, overall == null ? '—' : String(overall), h('small', {}, ' / 100')),
+          h('div', { class: 'kpi-sub' }, r.meta.scoring && r.meta.scoring.counted_findings != null ? t('k.scored_from', r.meta.scoring.counted_findings) : ''),
+        ),
+      ),
       h('div', { class: `kpi kpi-${comp.cls}` },
         h('div', { class: 'kpi-top' }, h('span', { class: 'kpi-label' }, t('k.completion')), ic('flag', 'kpi-ic')),
         h('div', { class: 'kpi-value' }, comp.text),
         h('div', { class: 'kpi-sub' }, compSub),
       ),
       h('div', { class: 'kpi' },
-        h('div', { class: 'kpi-top' }, h('span', { class: 'kpi-label' }, t('k.score')), ic('star', 'kpi-ic accent')),
-        h('div', { class: 'kpi-value' }, score == null ? '—' : String(score), h('small', {}, ' / 5')),
-        h('div', { class: 'meter' }, h('span', { style: `width:${score == null ? 0 : (score / 5) * 100}%` })),
-        h('div', { class: 'kpi-sub' }, r.meta.scoring ? t('k.scored_from', r.meta.scoring.counted_findings) : t('k.not_scored')),
-      ),
-      h('div', { class: 'kpi' },
         h('div', { class: 'kpi-top' }, h('span', { class: 'kpi-label' }, t('k.total')), ic('file', 'kpi-ic')),
         h('div', { class: 'kpi-value' }, String(r.findings.length)),
         h('div', { class: 'kpi-sub sev-inline' },
-          h('span', { class: 'sev-high' }, `${sevLabel('high')} ${c.high}`), ' | ',
-          h('span', { class: 'sev-medium' }, `${sevLabel('medium')} ${c.medium}`), ' | ',
-          h('span', { class: 'sev-low' }, `${sevLabel('low')} ${c.low}`),
+          SEVS.map((s, i) => [i ? ' · ' : '', h('span', { class: `sev-${s}` }, `${sevLabel(s)} ${c[s]}`)]),
         ),
       ),
       h('div', { class: 'kpi' },
@@ -151,14 +159,41 @@
     );
   }
 
+  // درجة كل معيار من 100، أو "غير مُقيّمة" إن لم يتوفر دليل
+  function renderCategoryScores(r) {
+    const cs = r.category_scores;
+    if (!cs) return null;
+    return h('section', { class: 'cat-scores', 'aria-label': t('cats.title') },
+      CATS.map((c) => {
+        const x = cs[c] || {};
+        const sc = x.score;
+        return h('button', {
+          type: 'button',
+          class: `cat-score tone-${tone(sc)}`,
+          onclick: () => {
+            filters.cat = c;
+            switchTab('findings');
+          },
+        },
+          h('span', { class: 'cat-name' }, catLabel(c)),
+          h('span', { class: 'cat-val' }, sc == null ? t('cats.na') : String(sc)),
+          h('div', { class: 'meter thin' }, h('span', { style: `width:${sc == null ? 0 : sc}%` })),
+          h('span', { class: 'cat-std' }, sc == null ? t('cats.na_hint') : x.standard || ''),
+        );
+      }),
+    );
+  }
+
   // ---------- التبويبات ----------
 
   function renderTabs(r) {
     const labels = {
       summary: t('tabs.summary'),
       findings: `${t('tabs.findings')} (${r.findings.length})`,
+      priorities: t('tabs.priorities'),
       events: `${t('tabs.events')} (${r.missing_analytics_events.length})`,
       insufficient: `${t('tabs.insufficient')} (${r.insufficient_evidence.length})`,
+      checklist: t('tabs.checklist'),
       evidence: t('tabs.evidence'),
     };
     return h('nav', { class: 'tabs', role: 'tablist' },
@@ -180,35 +215,60 @@
     render();
   }
 
-  function findingsTable(r, list, { compact = false } = {}) {
-    const cols = compact
-      ? ['col.num', 'col.criterion', 'col.finding', 'col.step', 'col.severity']
-      : ['col.severity', 'col.step', 'col.evidence', 'col.impact', 'col.rec', 'col.conf'];
-    const rows = list.map((f, i) =>
-      compact
-        ? h('tr', { class: `row-${f.severity}` },
-            h('td', { class: 'num' }, String(i + 1)),
-            h('td', {}, critLabel(f.criterion)),
-            h('td', { dir: 'auto' }, bd(f.impact || f.evidence)),
-            h('td', { class: 'num' }, String(f.step)),
-            h('td', {}, h('span', { class: `badge sev-${f.severity}` }, sevLabel(f.severity))),
-          )
-        : h('tr', { class: `row-${f.severity}` },
-            h('td', {}, h('span', { class: `badge sev-${f.severity}` }, sevLabel(f.severity)), h('div', { class: 'crit' }, critLabel(f.criterion)), h('code', { class: 'tiny' }, f.criterion)),
-            h('td', {}, h('span', { class: 'step-pill' }, String(f.step)), h('div', { class: 'muted small', dir: 'auto' }, bd(stepText(r, f.step)))),
-            h('td', { dir: 'auto' }, bd(f.evidence),
-              h('div', { class: 'src' }, `${t('f.source')}: `, h('bdi', {}, f.evidence_source),
-                f.origin === 'rule' ? h('span', { class: 'origin' }, t('f.rule')) : f.origin === 'model' ? h('span', { class: 'origin model' }, t('f.model')) : null)),
-            h('td', { dir: 'auto' }, bd(f.impact)),
-            h('td', { dir: 'auto' }, bd(f.recommendation), h('div', { class: 'review' }, ic('clock'), t('f.review'))),
-            h('td', {}, h('span', { class: `conf conf-${f.confidence}` }, sevLabel(f.confidence))),
-          ),
+  // جدول الملاحظات بالأعمدة المطلوبة: المشكلة | المعيار | المكان | الشدة | الإصلاح (مع كود)
+  function issueTable(r, list) {
+    const rows = list.map((f) =>
+      h('tr', { class: `row-${f.severity}` },
+        h('td', {},
+          h('strong', { class: 'issue-title', dir: 'auto' }, bd(f.title || f.impact || f.evidence)),
+          h('div', { class: 'small muted', dir: 'auto' }, `${t('f.evidence')}: `, bd(f.evidence)),
+          f.impact && f.title ? h('div', { class: 'small', dir: 'auto' }, bd(f.impact)) : null,
+          h('div', { class: 'src' }, `${t('f.source')}: `, h('bdi', {}, f.evidence_source),
+            f.origin === 'rule' ? h('span', { class: 'origin' }, t('f.rule')) : f.origin === 'model' ? h('span', { class: 'origin model' }, t('f.model')) : null),
+        ),
+        h('td', { class: 'std', dir: 'ltr' }, f.standard || '—'),
+        h('td', { class: 'where' }, f.where ? h('bdi', { class: 'url' }, f.where) : h('span', { class: 'muted small', dir: 'auto' }, bd(stepText(r, f.step)))),
+        h('td', {}, h('span', { class: `badge sev-${f.severity}` }, sevLabel(f.severity)), h('div', { class: 'tiny-meta' }, `${t('col.effort')}: ${effLabel(f.effort)}`), h('div', { class: 'tiny-meta' }, `${t('col.conf')}: ${sevLabel(f.confidence)}`)),
+        h('td', { dir: 'auto' },
+          bd(f.recommendation),
+          f.code ? h('details', { class: 'code-box' }, h('summary', {}, t('f.code')), h('pre', { dir: 'ltr' }, h('code', {}, f.code))) : null,
+          h('div', { class: 'review' }, ic('clock'), t('f.review')),
+        ),
+      ),
     );
-    if (!rows.length) rows.push(h('tr', {}, h('td', { colspan: cols.length, class: 'empty' }, t('fl.none'))));
+    if (!rows.length) rows.push(h('tr', {}, h('td', { colspan: 5, class: 'empty' }, t('fl.none'))));
     return h('div', { class: 'table-wrap' },
-      h('table', { class: `grid ${compact ? 'compact' : 'findings'}` },
-        h('thead', {}, h('tr', {}, cols.map((c) => h('th', {}, t(c))))),
+      h('table', { class: 'grid findings' },
+        h('thead', {}, h('tr', {}, ['col.issue', 'col.standard', 'col.where', 'col.severity', 'col.fix'].map((c) => h('th', {}, t(c))))),
         h('tbody', {}, rows),
+      ),
+    );
+  }
+
+  const RATING_CLS = { good: 'good', needs_improvement: 'mid', poor: 'bad' };
+  function metricsPanel(r) {
+    const m = r.metrics;
+    if (!m) return null;
+    const card = (name, val, rating, hint) =>
+      h('div', { class: `metric m-${RATING_CLS[rating] || 'none'}` },
+        h('span', { class: 'metric-name' }, name),
+        h('strong', { class: 'metric-val' }, val),
+        h('span', { class: 'metric-rating' }, rating ? t(`rating.${rating}`) : hint || ''),
+        hint && rating ? h('span', { class: 'metric-hint', dir: /[≤<]/.test(hint) ? 'ltr' : 'auto' }, hint) : null,
+      );
+    const sec = (v) => (v == null ? '—' : `${(v / 1000).toFixed(2)} s`);
+    const ms = (v) => (v == null ? '—' : `${v} ms`);
+    return h('section', { class: 'card' },
+      h('div', { class: 'card-head' }, h('h2', {}, t('cwv.title')), h('span', { class: 'muted small', dir: 'ltr' }, m.conditions)),
+      h('div', { class: 'metrics' },
+        card('LCP', sec(m.lcp.value), m.lcp.rating, '≤ 2.5 s'),
+        card('INP', '—', null, t('cwv.inp_note')),
+        card('CLS', m.cls.value == null ? '—' : String(m.cls.value), m.cls.rating, '≤ 0.1'),
+        card('TBT', ms(m.tbt.value), m.tbt.rating, t('cwv.tbt_hint')),
+        card('FCP', sec(m.fcp.value), m.fcp.rating, '≤ 1.8 s'),
+        card('TTFB', ms(m.ttfb.value), m.ttfb.rating, '≤ 0.8 s'),
+        card(t('cwv.weight'), `${(m.total_kb / 1024).toFixed(2)} MB`, m.total_kb > 1600 ? 'poor' : 'good', `JS ${m.js_kb} KB · IMG ${m.img_kb} KB`),
+        card(t('cwv.requests'), String(m.requests), null, `${t('cwv.blocking')}: ${m.render_blocking}`),
       ),
     );
   }
@@ -216,22 +276,12 @@
   function tabSummary(r) {
     const c = counts(r.findings);
     const total = r.findings.length || 1;
-    const order = { high: 0, medium: 1, low: 2 };
-    const seen = new Set();
-    const recs = [...r.findings]
-      .filter((f) => f.recommendation)
-      .sort((a, b) => order[a.severity] - order[b.severity] || order[a.confidence] - order[b.confidence] || a.step - b.step)
-      .filter((f) => (seen.has(f.recommendation) ? false : seen.add(f.recommendation)))
-      .slice(0, 3);
-    const crit = {};
-    const rank = { high: 3, medium: 2, low: 1 };
+    const byCat = {};
     for (const f of r.findings) {
-      const e = (crit[f.criterion] ||= { count: 0, worst: 'low' });
-      e.count++;
-      if (rank[f.severity] > rank[e.worst]) e.worst = f.severity;
+      const k = catOf(f);
+      byCat[k] = (byCat[k] || 0) + 1;
     }
-    const maxCrit = Math.max(1, ...Object.values(crit).map((x) => x.count));
-
+    const top = (r.priorities || []).map((i) => r.findings[i]).filter(Boolean).slice(0, 5);
     return h('div', { class: 'tab-panel' },
       h('div', { class: 'summary-grid' },
         h('section', { class: 'card' },
@@ -241,18 +291,14 @@
             ? h('p', { class: 'muted small', dir: 'auto' }, `${t('s.condition')}: `, bd(r.meta.success_condition),
                 r.meta.success_condition_basis ? [h('br'), `${t('s.basis')}: `, bd(r.meta.success_condition_basis)] : null)
             : null,
-          h('h3', {}, t('s.recs')),
-          recs.length
-            ? h('ol', { class: 'recs' }, recs.map((f, i) => h('li', {}, h('span', { class: 'rec-n' }, String(i + 1)), h('span', { dir: 'auto' }, bd(f.recommendation)))))
-            : h('p', { class: 'empty' }, t('s.no_recs')),
-          recs.length ? h('p', { class: 'muted small' }, t('s.recs_note')) : null,
+          r.meta.scoring && r.meta.scoring.method ? h('p', { class: 'muted small', dir: 'auto' }, bd(r.meta.scoring.method)) : null,
         ),
         h('section', { class: 'card' },
           h('h2', {}, t('s.dist')),
           h('div', { class: 'dist' },
-            ring(r.score_out_of_5, 'lg'),
+            ring(overallOf(r), 'lg'),
             h('div', { class: 'dist-bars' },
-              ['high', 'medium', 'low'].map((s) =>
+              SEVS.map((s) =>
                 h('div', { class: 'dist-row' },
                   h('span', { class: 'dist-label' }, sevLabel(s)),
                   h('div', { class: 'meter thin' }, h('span', { class: `fill-${s}`, style: `width:${(c[s] / total) * 100}%` })),
@@ -262,29 +308,44 @@
             ),
           ),
           h('h3', {}, t('s.criteria')),
-          Object.keys(crit).length
-            ? h('div', { class: 'crit-bars' },
-                Object.entries(crit)
-                  .sort((a, b) => b[1].count - a[1].count)
-                  .map(([k, v]) =>
-                    h('div', { class: 'dist-row' },
-                      h('span', { class: 'dist-label' }, critLabel(k)),
-                      h('div', { class: 'meter thin' }, h('span', { class: `fill-${v.worst}`, style: `width:${(v.count / maxCrit) * 100}%` })),
-                      h('strong', {}, String(v.count)),
-                    ),
-                  ),
-              )
-            : h('p', { class: 'empty' }, t('s.no_criteria')),
+          h('div', { class: 'crit-bars' },
+            CATS.filter((k) => byCat[k]).map((k) =>
+              h('div', { class: 'dist-row' },
+                h('span', { class: 'dist-label' }, catLabel(k)),
+                h('div', { class: 'meter thin' }, h('span', { style: `width:${(byCat[k] / Math.max(...Object.values(byCat))) * 100}%` })),
+                h('strong', {}, String(byCat[k])),
+              ),
+            ),
+          ),
         ),
       ),
+      metricsPanel(r),
       h('section', { class: 'card' },
         h('div', { class: 'card-head' },
-          h('h2', {}, t('s.top')),
-          r.findings.length > 0 ? h('button', { type: 'button', class: 'btn ghost small-btn', onclick: () => switchTab('findings') }, t('s.view_all'), ic('arrow', 'flip')) : null,
+          h('h2', {}, t('p.top10')),
+          top.length ? h('button', { type: 'button', class: 'btn ghost small-btn', onclick: () => switchTab('priorities') }, t('s.view_all'), ic('arrow', 'flip')) : null,
         ),
-        r.findings.length
-          ? findingsTable(r, r.findings.slice(0, 5), { compact: true })
-          : h('p', { class: 'empty' }, r.meta.analysis_mode === 'rules' ? t('f.empty_rules') : t('f.empty')),
+        top.length ? priorityTable(top) : h('p', { class: 'empty' }, r.meta.analysis_mode === 'rules' ? t('f.empty_rules') : t('f.empty')),
+      ),
+    );
+  }
+
+  function priorityTable(list) {
+    return h('div', { class: 'table-wrap' },
+      h('table', { class: 'grid compact' },
+        h('thead', {}, h('tr', {}, ['col.rank', 'col.issue', 'col.category', 'col.severity', 'col.effort', 'col.standard'].map((c) => h('th', {}, t(c))))),
+        h('tbody', {},
+          list.map((f, i) =>
+            h('tr', { class: `row-${f.severity}` },
+              h('td', { class: 'num' }, String(i + 1)),
+              h('td', { dir: 'auto' }, bd(f.title || f.impact)),
+              h('td', {}, catLabel(catOf(f))),
+              h('td', {}, h('span', { class: `badge sev-${f.severity}` }, sevLabel(f.severity))),
+              h('td', { class: 'nowrap' }, effLabel(f.effort)),
+              h('td', { class: 'std', dir: 'ltr' }, f.standard || '—'),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -292,7 +353,6 @@
   function tabFindings(r) {
     if (!r.findings.length)
       return h('div', { class: 'tab-panel' }, h('section', { class: 'card' }, h('p', { class: 'empty' }, r.meta.analysis_mode === 'rules' ? t('f.empty_rules') : t('f.empty'))));
-    const list = r.findings.filter((f) => (filters.sev === 'all' || f.severity === filters.sev) && (filters.crit === 'all' || f.criterion === filters.crit));
     const chip = (key, v, label) =>
       h('button', {
         type: 'button',
@@ -302,16 +362,74 @@
           render();
         },
       }, label);
-    const crits = [...new Set(r.findings.map((f) => f.criterion))];
-    return h('div', { class: 'tab-panel' },
-      h('section', { class: 'card' },
-        h('div', { class: 'filters' },
-          h('div', { class: 'filter' }, chip('sev', 'all', t('fl.all_sev')), ['high', 'medium', 'low'].map((s) => chip('sev', s, sevLabel(s)))),
-          crits.length > 1 ? h('div', { class: 'filter' }, chip('crit', 'all', t('fl.all_crit')), crits.map((c) => chip('crit', c, critLabel(c)))) : null,
+    const sections = CATS.filter((c) => filters.cat === 'all' || filters.cat === c).map((c) => {
+      const x = (r.category_scores || {})[c];
+      const list = r.findings.filter((f) => catOf(f) === c && (filters.sev === 'all' || f.severity === filters.sev));
+      if (!list.length && filters.cat === 'all' && !(x && x.assessed)) return null;
+      return h('section', { class: 'card cat-section', id: `cat-${c}` },
+        h('div', { class: 'card-head' },
+          h('div', {}, h('h2', {}, catLabel(c)), x && x.standard ? h('p', { class: 'muted small', dir: 'ltr' }, x.standard) : null),
+          x ? h('span', { class: `score-pill tone-${tone(x.score)}`, dir: x.score == null ? 'auto' : 'ltr' }, x.score == null ? t('cats.na') : `${x.score} / 100`) : null,
         ),
-        findingsTable(r, list),
-        h('p', { class: 'muted small' }, t('s.recs_note')),
+        list.length ? issueTable(r, list) : h('p', { class: 'empty' }, x && x.score == null ? t('cat.not_assessed') : t('cat.no_findings')),
+      );
+    });
+    return h('div', { class: 'tab-panel' },
+      h('section', { class: 'card filters-card' },
+        h('div', { class: 'filters' },
+          h('div', { class: 'filter' }, chip('cat', 'all', t('fl.all_cat')), CATS.map((c) => chip('cat', c, catLabel(c)))),
+          h('div', { class: 'filter' }, chip('sev', 'all', t('fl.all_sev')), SEVS.map((s) => chip('sev', s, sevLabel(s)))),
+        ),
       ),
+      sections,
+      h('p', { class: 'muted small' }, t('s.recs_note')),
+    );
+  }
+
+  function tabPriorities(r) {
+    const top = (r.priorities || []).map((i) => r.findings[i]).filter(Boolean);
+    const quick = (r.quick_wins || []).map((i) => r.findings[i]).filter(Boolean);
+    return h('div', { class: 'tab-panel' },
+      h('section', { class: 'card' }, h('h2', {}, t('p.top10')), top.length ? priorityTable(top) : h('p', { class: 'empty' }, t('p.none'))),
+      h('section', { class: 'card' },
+        h('h2', {}, t('p.quick')),
+        quick.length
+          ? h('ol', { class: 'quick-list' },
+              quick.map((f) =>
+                h('li', {},
+                  h('div', { class: 'quick-head' }, h('span', { class: `badge sev-${f.severity}` }, sevLabel(f.severity)), h('strong', { dir: 'auto' }, bd(f.title || f.impact)), h('span', { class: 'chip-soft' }, catLabel(catOf(f)))),
+                  h('div', { class: 'small', dir: 'auto' }, bd(f.recommendation)),
+                  f.code ? h('pre', { dir: 'ltr' }, h('code', {}, f.code)) : null,
+                  h('div', { class: 'std small', dir: 'ltr' }, f.standard),
+                ),
+              ),
+            )
+          : h('p', { class: 'empty' }, t('p.none')),
+      ),
+    );
+  }
+
+  function tabChecklist(r) {
+    const cl = r.checklist;
+    return h('div', { class: 'tab-panel' },
+      cl
+        ? h('section', { class: 'card' },
+            h('h2', {}, t('cl.title')),
+            CATS.filter((c) => cl[c]).map((c) =>
+              h('div', { class: 'cl-group' },
+                h('h3', {}, catLabel(c)),
+                h('ul', { class: 'cl-list' },
+                  cl[c].map(([item, tool]) =>
+                    h('li', {}, h('label', {}, h('input', { type: 'checkbox' }), h('span', { dir: 'auto' }, item)), h('span', { class: 'cl-tool', dir: 'ltr' }, tool)),
+                  ),
+                ),
+              ),
+            ),
+          )
+        : null,
+      r.insufficient_evidence.length
+        ? h('section', { class: 'card' }, h('h2', {}, t('cl.unverified')), h('ul', { class: 'ins-list' }, r.insufficient_evidence.map((s) => h('li', {}, ic('info'), h('span', { dir: 'auto' }, bd(s))))))
+        : null,
     );
   }
 
@@ -423,8 +541,8 @@
     document.title = `${r.product_name} — Quality Review`;
     app.innerHTML = '';
     app.append(...renderHead(r));
-    app.append(renderKpis(r), renderTabs(r));
-    const panel = { summary: tabSummary, findings: tabFindings, events: tabEvents, insufficient: tabInsufficient, evidence: tabEvidence }[activeTab](r);
+    app.append(...[renderKpis(r), renderCategoryScores(r), renderTabs(r)].filter(Boolean));
+    const panel = { summary: tabSummary, findings: tabFindings, priorities: tabPriorities, events: tabEvents, insufficient: tabInsufficient, checklist: tabChecklist, evidence: tabEvidence }[activeTab](r);
     app.append(panel);
   }
 

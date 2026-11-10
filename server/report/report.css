@@ -144,3 +144,37 @@ ul.plain li { margin-bottom: 1.5mm; break-inside: avoid; }
 .review-note { font-size: 8.5pt; color: #6f6b64; margin-top: 2mm; }
 .nowrap { white-space: nowrap; }
 .code-tag { direction: ltr; text-align: start; font-size: 7pt; color: #6f6b64; overflow-wrap: anywhere; }
+
+/* ===== تقرير التدقيق القائم على المعايير ===== */
+.sev-critical { color: #7d1530; }
+table.findings tr.row-critical td:first-child { border-inline-start-color: #7d1530; }
+table.data tr.row-critical td:first-child { border-inline-start: 2pt solid #7d1530; }
+.std, td.std { direction: ltr; text-align: start; font-size: 7.6pt; color: #1f4d43; overflow-wrap: anywhere; }
+td.where { font-size: 7.8pt; overflow-wrap: anywhere; }
+.score { font-weight: 700; white-space: nowrap; }
+.score-good { color: #2f7a55; }
+.score-mid { color: #a8661f; }
+.score-bad { color: #b3413a; }
+.score-na { color: #8a857c; font-weight: 400; }
+.rate { font-weight: 700; }
+.rate-good { color: #2f7a55; }
+.rate-needs_improvement { color: #a8661f; }
+.rate-poor { color: #b3413a; }
+pre.code {
+  direction: ltr; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-family: 'DejaVu Sans Mono', monospace; font-size: 6.8pt; line-height: 1.45;
+  background: #f6f1ea; border: 0.5pt solid #e2dbcf; border-radius: 1.5mm; padding: 1.6mm 2mm; margin: 1.5mm 0 0;
+}
+.cover .journey.ltr { font-size: 11pt; color: #6f6b64; }
+table.cover-cats { width: 100%; border-collapse: collapse; margin: 0 0 8mm; }
+table.cover-cats td { padding: 1.4mm 0; border-bottom: 0.4pt solid #e2dbcf; font-size: 10pt; }
+table.cover-cats td.num { text-align: end; }
+.cover .standards { margin-top: 8mm; }
+.cat-block { break-inside: auto; margin-bottom: 7mm; }
+.cat-head { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 0.6pt solid #d9d2c7; padding-bottom: 1.5mm; margin-top: 6mm; }
+.std-line { direction: ltr; text-align: start; margin: 1mm 0 2.5mm; }
+.sev-line { margin: 3mm 0; }
+ol.quick { margin: 0; padding-inline-start: 6mm; }
+ol.quick li { margin-bottom: 3.5mm; break-inside: avoid; }
+.box { display: inline-block; width: 2.6mm; height: 2.6mm; border: 0.7pt solid #6f6b64; border-radius: 0.5mm; vertical-align: -0.3mm; margin-inline-end: 1mm; }
+.code-cell { font-family: 'DejaVu Sans Mono', monospace; font-size: 8.5pt; }

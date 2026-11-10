@@ -6,59 +6,127 @@
   "stopped_at_step": 5,
   "findings": [
     {
-      "criterion": "friction", "severity": "high", "step": 5, "evidence_source": "file:network.har",
+      "severity": "high",
+      "step": 5,
+      "evidence_source": "file:network.har",
       "evidence": "Two POST requests to /api/orders returned status 500 with {\"error\":\"PAYMENT_GATEWAY_TIMEOUT\"}, and no confirmation page request follows them.",
       "impact": "The customer cannot place the order, so the journey stops at order confirmation and the sale is lost.",
       "recommendation": "Fix the payment gateway timeout in the test environment, and show a clear state on payment failure with an alternative payment option.",
-      "confidence": "high"
+      "confidence": "high",
+      "category": "usability",
+      "title": "Order confirmation fails on a payment-gateway timeout",
+      "standard": "ISO 9241-11:2018 — Effectiveness · Nielsen heuristic #9: Help users recognize, diagnose, and recover from errors",
+      "where": "POST /api/orders",
+      "effort": "medium",
+      "code": ""
     },
     {
-      "criterion": "CX", "severity": "high", "step": 5, "evidence_source": "file:session-notes.md",
+      "severity": "high",
+      "step": 5,
+      "evidence_source": "file:session-notes.md",
       "evidence": "Tester note: “بعد إعادة تحميل الصفحة للمحاولة مجددًا، كانت حقول عنوان الشحن فارغة” (after reloading to retry, the shipping address fields were empty).",
       "impact": "Customer data is lost after the error, raising the chance of abandoning the order.",
       "recommendation": "Keep the address in the session and restore it automatically after a failed order confirmation.",
-      "confidence": "medium"
+      "confidence": "medium",
+      "category": "usability",
+      "title": "Address data is lost after the error",
+      "standard": "Nielsen heuristic #5: Error prevention · WCAG 2.2 SC 3.3.7 Redundant Entry (A)",
+      "where": "checkout — shipping address form",
+      "effort": "medium",
+      "code": "sessionStorage.setItem('checkout.address', JSON.stringify(address));"
     },
     {
-      "criterion": "UX", "severity": "medium", "step": 5, "evidence_source": "file:checkout.html",
+      "severity": "medium",
+      "step": 5,
+      "evidence_source": "file:checkout.html",
       "evidence": "The only visible error message is “حدث خطأ، حاول مرة أخرى” (an error occurred, try again), with no reason or next step.",
       "impact": "The customer does not know whether they were charged or what to do, and retries with difficulty.",
       "recommendation": "Replace the generic message with one stating the payment did not go through and nothing was charged, with buttons to retry or change the payment method.",
-      "confidence": "high"
+      "confidence": "high",
+      "category": "usability",
+      "title": "Generic error message with no cause or next step",
+      "standard": "Nielsen heuristic #9: Help users recognize, diagnose, and recover from errors · WCAG 2.2 SC 3.3.3 Error Suggestion (AA)",
+      "where": "checkout.html — div.alert-danger[role=alert]",
+      "effort": "low",
+      "code": "<div role=\"alert\">Payment did not go through and you were not charged. <button>Try again</button> <button>Use another method</button></div>"
     },
     {
-      "criterion": "accessibility", "severity": "medium", "step": 4, "evidence_source": "file:checkout.html",
+      "severity": "medium",
+      "step": 4,
+      "evidence_source": "file:checkout.html",
       "evidence": "The phone and postal_code fields in the shipping form have no label or aria-label and rely on placeholder only. The icon-close button has no text name.",
       "impact": "Screen-reader users cannot tell what the two fields are for and fill the address with difficulty.",
       "recommendation": "Add labels linked to phone and postal_code, and an aria-label to the close button.",
-      "confidence": "high"
+      "confidence": "high",
+      "category": "accessibility",
+      "title": "Fields without labels and an unnamed button",
+      "standard": "WCAG 2.2 SC 1.3.1 Info and Relationships (A) · WCAG 2.2 SC 4.1.2 Name, Role, Value (A)",
+      "where": "checkout.html — input[name=phone], input[name=postal_code], button.icon-close",
+      "effort": "low",
+      "code": "<label for=\"phone\">Mobile</label>\n<input id=\"phone\" name=\"phone\" type=\"tel\" autocomplete=\"tel\">\n<button class=\"icon-close\" aria-label=\"Close\">…</button>"
     },
     {
-      "criterion": "feature_completeness", "severity": "medium", "step": 4, "evidence_source": "file:checkout.html",
+      "severity": "medium",
+      "step": 4,
+      "evidence_source": "file:checkout.html",
       "evidence": "The order summary shows “رسوم الشحن: تُحسب عند الدفع” (shipping: calculated at payment) and “45 ر.س + الشحن”, while the expected feature is showing shipping cost before payment.",
       "impact": "The customer does not see the final total before paying, which weakens trust and adds hesitation.",
       "recommendation": "Calculate shipping once the city is chosen and show the final total before the confirm button.",
-      "confidence": "high"
+      "confidence": "high",
+      "category": "usability",
+      "title": "Shipping cost is not shown before payment",
+      "standard": "Nielsen heuristic #1: Visibility of system status · ISO 9241-11:2018 — Effectiveness",
+      "where": "checkout.html — #summary",
+      "effort": "medium",
+      "code": ""
     },
     {
-      "criterion": "feature_completeness", "severity": "low", "step": 5, "evidence_source": "file:checkout.html",
+      "severity": "low",
+      "step": 5,
+      "evidence_source": "file:checkout.html",
       "evidence": "The checkout page has no field, button or text for a discount code.",
       "impact": "Customers with a discount code cannot use it, but can still buy at full price.",
       "recommendation": "Add a discount code field to the order summary before payment.",
-      "confidence": "high"
+      "confidence": "high",
+      "category": "usability",
+      "title": "No discount code field",
+      "standard": "ISO 9241-11:2018 — Effectiveness (expected feature missing)",
+      "where": "checkout.html — #summary",
+      "effort": "low",
+      "code": ""
     },
     {
-      "criterion": "navigation", "severity": "low", "step": 3, "evidence_source": "file:session-notes.md",
+      "severity": "low",
+      "step": 3,
+      "evidence_source": "file:session-notes.md",
       "evidence": "Tester note: the “المتابعة بدون حساب” (continue without an account) option is a small text link below the sign-in form; it took about 20 seconds to find.",
       "impact": "A delay in reaching guest checkout, without blocking the task.",
       "recommendation": "Show “continue without an account” as a primary button next to sign-in.",
-      "confidence": "medium"
+      "confidence": "medium",
+      "category": "usability",
+      "title": "Guest checkout option is hard to find",
+      "standard": "Nielsen heuristic #6: Recognition rather than recall · ISO 9241-11:2018 — Efficiency",
+      "where": "checkout/login — “continue without an account” link",
+      "effort": "low",
+      "code": "<a class=\"btn btn-primary\" href=\"/checkout?guest=1\">Continue without an account</a>"
     }
   ],
   "missing_analytics_events": [
-    { "event_name": "add_shipping_info", "when": "When the shipping address is saved in step 4", "why": "POST /api/checkout/address succeeded with 200 in network.har, but no request to analytics.nakheel.test/collect carrying add_shipping_info followed." },
-    { "event_name": "add_payment_info", "when": "When a payment method is chosen in step 5", "why": "Neither network.har nor the dataLayer in checkout.html sends this event, even though a payment method was chosen." },
-    { "event_name": "purchase", "when": "When the order confirmation page appears", "why": "The confirmation page never appeared because /api/orders failed, so the event was not sent. Re-check after the payment fix." }
+    {
+      "event_name": "add_shipping_info",
+      "when": "When the shipping address is saved in step 4",
+      "why": "POST /api/checkout/address succeeded with 200 in network.har, but no request to analytics.nakheel.test/collect carrying add_shipping_info followed."
+    },
+    {
+      "event_name": "add_payment_info",
+      "when": "When a payment method is chosen in step 5",
+      "why": "Neither network.har nor the dataLayer in checkout.html sends this event, even though a payment method was chosen."
+    },
+    {
+      "event_name": "purchase",
+      "when": "When the order confirmation page appears",
+      "why": "The confirmation page never appeared because /api/orders failed, so the event was not sent. Re-check after the payment fix."
+    }
   ],
   "insufficient_evidence": [
     "The order confirmation page (step 6) was not attached, so its content and the order number cannot be judged.",
