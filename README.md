@@ -4,11 +4,11 @@
 
 ```bash
 clone the website using github link -> in cmd -> git clone<url>
-navigate to its folder using cd
-git pull
-npm install
-npx playwright install chromium
-npm start
+
+git pull ( each time starting the project)
+npm install (once)
+npx playwright install chromium(once)
+npm start(each time)
 ```
 
 افتح: http://localhost:3000
