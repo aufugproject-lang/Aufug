@@ -3,6 +3,9 @@
 ## التشغيل المحلي
 
 ```bash
+clone the website using github link -> in cmd -> git clone<url>
+navigate to its folder using cd
+git pull
 npm install
 npx playwright install chromium
 npm start
